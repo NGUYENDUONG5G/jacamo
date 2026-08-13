@@ -345,6 +345,7 @@ public class JaCaMoLauncher extends RunLocalMAS {
         createEnvironment();
         createOrganisation();
         createInstitution();
+        createFailureModel();
         createAgs();
         //createController();        
     }
@@ -359,6 +360,19 @@ public class JaCaMoLauncher extends RunLocalMAS {
             }
         }        
         super.start(); // start agents after platforms
+    }
+
+    protected void createFailureModel() {
+        if (getJaCaMoProject().getFailureModel() != null) {
+            jacamo.platform.FailureModel p = new jacamo.platform.FailureModel();
+            p.setJcmProject(getJaCaMoProject());
+            try {
+                p.init(null);
+                platforms.add(p);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     public void createEnvironment() throws JasonException {

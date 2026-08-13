@@ -21,6 +21,7 @@ public class JaCaMoProject extends MAS2JProject implements Serializable {
     protected Map<String,JaCaMoWorkspaceParameters> workspaces = new HashMap<>();
     protected List<JaCaMoOrgParameters>       orgs       = new ArrayList<>();
     protected List<JaCaMoInstParameters>      insts      = new ArrayList<>();
+    protected JaCaMoFailureModelParameters failureModel = null;
     protected Map<String,String> nodeHosts = new HashMap<>();
     //protected Set<String> toDebug = new HashSet<String>();
 
@@ -249,6 +250,14 @@ public class JaCaMoProject extends MAS2JProject implements Serializable {
                 return o;
         }
         return null;
+    }
+
+    public void setFailureModel(JaCaMoFailureModelParameters fm) {
+        this.failureModel = fm;
+    }
+
+    public JaCaMoFailureModelParameters getFailureModel() {
+        return this.failureModel;
     }
 
     public void addAgWorkspace(String agId, JaCaMoWorkspaceParameters w) {

@@ -114,6 +114,11 @@ TOKEN : {
 
 |  <INST:         "institution">
 |  <WORKSPACES:   "workspaces">
+|  <FAILURE_MODEL: "failure-model">
+|  <FAILURE:       "failure">
+|  <ERROR:         "error">
+|  <CONDITIONS:    "conditions">
+|  <RECOVERY_ACTIVITIES: "recovery-activities">
 
 | <TK_TRUE:   "true">
 | <TK_FALSE:  "false">
@@ -193,6 +198,8 @@ JaCaMoProject parse(String directory) :           { Token masId; String f = null
   (institution())*
   
   (organisation())*
+
+  (failureModel())*
 
   (
       (
@@ -602,3 +609,60 @@ StringTerm string():{ Token k; StringTermImpl s; }
                     }
 }
 
+
+void failureModel() : {
+    Token t;
+    JaCaMoFailureModelParameters fm = new JaCaMoFailureModelParameters(project);
+    JaCaMoFailureModelParameters.FailureParameters fp;
+}
+{
+    <FAILURE_MODEL> t = <ATOM> { fm.setName(t.image); }
+    "{" (<EOL>)*
+        (
+            fp = failure() { fm.addFailure(fp); }
+        )*
+    "}" (<EOL>)*
+    { project.setFailureModel(fm); }
+}
+
+JaCaMoFailureModelParameters.FailureParameters failure() : {
+    Token t;
+    JaCaMoFailureModelParameters.FailureParameters fp = null;
+    JaCaMoFailureModelParameters.ErrorParameters ep;
+}
+{
+    <FAILURE> t = <ATOM> { fp = new JaCaMoFailureModelParameters.FailureParameters(t.image); }
+    "{" (<EOL>)*
+        (
+            ep = errorDef() { fp.addError(ep); }
+        )*
+    "}" (<EOL>)*
+    { return fp; }
+}
+
+JaCaMoFailureModelParameters.ErrorParameters errorDef() : {
+    Token t;
+    Object c;
+    Object r;
+    JaCaMoFailureModelParameters.ErrorParameters ep = null;
+}
+{
+    <ERROR> t = <ATOM> { ep = new JaCaMoFailureModelParameters.ErrorParameters(t.image); }
+    "{" (<EOL>)*
+        (
+            <CONDITIONS> ":" ( c = val() (<EOL>|",")+ { ep.addCondition(c.toString()); } )+
+          | <RECOVERY_ACTIVITIES> ":" ( r = val() (<EOL>|",")+ { ep.addRecoveryActivity(r.toString()); } )+
+        )*
+    "}" (<EOL>)*
+    { return ep; }
+}
+
+Object val() : { Object o; Token t; }
+{
+   ( t = <STRING> { o = t.image.substring(1, t.image.length() - 1); }
+   | t = <REAL>   { o = t.image; }
+   | t = <INT>    { o = t.image; }
+   | o = literal() { o = o.toString(); }
+   )
+   { return o; }
+}

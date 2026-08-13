@@ -1,0 +1,34 @@
+mas my_example {
+
+    agent delivery_truck {
+        ag-class: jacamo.platform.ExtendedAgent
+    }
+
+    organisation o1 : src/org/my-org.xml {
+        group my_team : team {
+            responsible-for: s1
+        }
+        scheme s1 : delivery_scheme {
+        }
+    }
+
+    failure-model fm_delivery {
+        failure deliver_on_time {
+            error delivery_delayed {
+                conditions: traffic(congested)
+                recovery-activities: "goal:plan_route", 
+                "goal:deliver_on_time", 
+                "env:w1.navigation.speedUp", 
+                "org:my_team.upgrade_priority"
+            }
+            error out_of_fuel {
+                conditions: fuel(empty)
+                recovery-activities: "goal:refuel", 
+                "env:w1.navigation.find_gas_station", 
+                "org:my_team.request_fuel_allowance"
+            }
+        }
+    }
+
+    class-path:  bin/classes
+}

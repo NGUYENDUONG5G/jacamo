@@ -56,4 +56,41 @@ public class JaCamoProjectTest {
         System.out.println(project);
     }
 
+    @Test
+    public void testParseFailureModel() {
+        String jcmSource = "mas test_failure {\n" +
+                           "    failure-model fm_test {\n" +
+                           "        failure goal_x {\n" +
+                           "            error err_y {\n" +
+                           "                conditions: battery(low)\n" +
+                           "                recovery-activities: \"plan:substitute_plan\"\n" +
+                           "            }\n" +
+                           "        }\n" +
+                           "    }\n" +
+                           "}\n";
+        try {
+            parser = new JaCaMoProjectParser(new StringReader(jcmSource));
+            JaCaMoProject project = parser.parse(".");
+            assertTrue(project.getFailureModel() != null);
+            assertEquals("fm_test", project.getFailureModel().getName());
+            assertEquals(1, project.getFailureModel().getFailures().size());
+            
+            var failure = project.getFailureModel().getFailures().get(0);
+            assertEquals("goal_x", failure.getGoalId());
+            assertEquals(1, failure.getErrors().size());
+            
+            var error = failure.getErrors().get(0);
+            assertEquals("err_y", error.getErrorName());
+            assertEquals(1, error.getConditions().size());
+            assertEquals("battery(low)", error.getConditions().get(0));
+            assertEquals(1, error.getRecoveryActivities().size());
+            assertEquals("plan:substitute_plan", error.getRecoveryActivities().get(0));
+            
+            System.out.println("Parse test passed successfully!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            org.junit.Assert.fail("Parsing failed: " + e.getMessage());
+        }
+    }
+
 }
