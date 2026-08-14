@@ -12,21 +12,19 @@ mas my_example {
         }
     }
 
-    failure-model fm_delivery {
-        failure deliver_on_time {
-            error delivery_delayed {
-                conditions: traffic(congested)
-                recovery-activities: "goal:plan_route", 
-                "goal:deliver_on_time", 
-                "env:w1.navigation.speedUp", 
-                "org:my_team.upgrade_priority"
-            }
-            error out_of_fuel {
-                conditions: fuel(empty)
-                recovery-activities: "goal:refuel", 
-                "env:w1.navigation.find_gas_station", 
-                "org:my_team.request_fuel_allowance"
-            }
+    failure deliver_on_time {
+        error delivery_delayed {
+            conditions: traffic(congested)
+            recovery-activities: "goal:plan_route", 
+            "goal:deliver_on_time", 
+            "env:w1.navigation.speedUp", 
+            "org:my_team.upgrade_priority"
+        }
+        error out_of_fuel {
+            conditions: fuel(empty)
+            recovery-activities: "goal:refuel", 
+            "env:w1.navigation.find_gas_station", 
+            "org:my_team.request_fuel_allowance"
         }
     }
 

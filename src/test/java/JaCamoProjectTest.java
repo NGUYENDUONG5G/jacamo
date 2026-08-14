@@ -59,12 +59,10 @@ public class JaCamoProjectTest {
     @Test
     public void testParseFailureModel() {
         String jcmSource = "mas test_failure {\n" +
-                           "    failure-model fm_test {\n" +
-                           "        failure goal_x {\n" +
-                           "            error err_y {\n" +
-                           "                conditions: battery(low)\n" +
-                           "                recovery-activities: \"plan:substitute_plan\"\n" +
-                           "            }\n" +
+                           "    failure goal_x {\n" +
+                           "        error err_y {\n" +
+                           "            conditions: battery(low)\n" +
+                           "            recovery-activities: \"plan:substitute_plan\"\n" +
                            "        }\n" +
                            "    }\n" +
                            "}\n";
@@ -72,7 +70,6 @@ public class JaCamoProjectTest {
             parser = new JaCaMoProjectParser(new StringReader(jcmSource));
             JaCaMoProject project = parser.parse(".");
             assertTrue(project.getFailureModel() != null);
-            assertEquals("fm_test", project.getFailureModel().getName());
             assertEquals(1, project.getFailureModel().getFailures().size());
             
             var failure = project.getFailureModel().getFailures().get(0);
