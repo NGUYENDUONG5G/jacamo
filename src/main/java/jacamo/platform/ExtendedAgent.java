@@ -15,6 +15,10 @@ import recovery.Failure;
 import recovery.Error;
 import recovery.Condition;
 import recovery.RecoveryActivity;
+import recovery.PlanAdaptation;
+import recovery.GoalAdaptation;
+import recovery.EnvironmentAdaptation;
+import recovery.OrganisationAdaptation;
 
 public class ExtendedAgent extends Agent {
     private static final long serialVersionUID = 1L;
@@ -74,12 +78,30 @@ public class ExtendedAgent extends Agent {
                         });
                     }
                     for (String actStr : eParam.getRecoveryActivities()) {
-                        error.addRecoveryActivity(new RecoveryActivity<ExtendedAgent>() {
-                            @Override
-                            public void execute(ExtendedAgent agent) {
-                                agent.executeRecoveryActivity(actStr);
+                        if (actStr.startsWith("plan:")) {
+                            error.addRecoveryActivity(new PlanAdaptation<>(actStr.substring(5)));
+                        } else if (actStr.startsWith("goal:")) {
+                            error.addRecoveryActivity(new GoalAdaptation<>(actStr.substring(5), true));
+                        } else if (actStr.startsWith("env:")) {
+                            String envDetails = actStr.substring(4);
+                            String[] parts = envDetails.split("\\.");
+                            String workspaceName = "default";
+                            String artifactName = "";
+                            String operationName = "";
+                            if (parts.length >= 3) {
+                                workspaceName = parts[0];
+                                artifactName = parts[1];
+                                operationName = parts[2];
+                            } else if (parts.length == 2) {
+                                artifactName = parts[0];
+                                operationName = parts[1];
                             }
-                        });
+                            error.addRecoveryActivity(new EnvironmentAdaptation<>(workspaceName, artifactName, operationName));
+                        } else if (actStr.startsWith("org:")) {
+                            error.addRecoveryActivity(new OrganisationAdaptation<>(actStr.substring(4)));
+                        } else {
+                            error.addRecoveryActivity(new GoalAdaptation<>(actStr, true));
+                        }
                     }
                     error.addRecoveryActivity(new RecoveryActivity<ExtendedAgent>() {
                         @Override
@@ -147,12 +169,66 @@ public class ExtendedAgent extends Agent {
                         ArtifactId aid = wsp.getArtifact(artifactName);
                         if (aid != null) {
                             getTS().getLogger().info("[Environment Adaptation] Invoking op: " + operationName + " on " + aid);
+                            try {
+                                cartagoArch.getSession().doAction(aid, new cartago.Op(operationName), null, -1);
+                            } catch (Exception ex) {
+                                getTS().getLogger().log(Level.SEVERE, "CArtAgO operation invocation failed", ex);
+                            }
+                        } else {
+                            getTS().getLogger().warning("[Environment Adaptation] Artifact " + artifactName + " not found in workspace: " + workspaceName);
                         }
                     }
                 }
             } else if (activityStr.startsWith("org:")) {
                 String orgDetails = activityStr.substring(4);
                 getTS().getLogger().info("[Organisation Adaptation] Executing organisation action: " + orgDetails);
+                try {
+                    jason.architecture.AgArch arch = getTS().getAgArch().getFirstAgArch();
+                    CAgentArch cartagoArch = null;
+                    while (arch != null) {
+                        if (arch instanceof CAgentArch) {
+                            cartagoArch = (CAgentArch) arch;
+                            break;
+                        }
+                        arch = arch.getNextAgArch();
+                    }
+                    if (cartagoArch != null) {
+                        String artifactName = "";
+                        String operationName = "";
+                        String[] parts = orgDetails.split("\\.");
+                        if (parts.length >= 2) {
+                            artifactName = parts[0];
+                            operationName = parts[1];
+                        } else if (parts.length == 1) {
+                            artifactName = parts[0];
+                        }
+                        if (!artifactName.isEmpty() && !operationName.isEmpty()) {
+                            cartago.CartagoEnvironment cenv = cartago.CartagoEnvironment.getInstance();
+                            cartago.Workspace wsp = null;
+                            var o1Opt = cenv.getRootWSP().getWorkspace().getChildWSP("o1");
+                            if (o1Opt.isPresent()) {
+                                wsp = o1Opt.get().getWorkspace();
+                            } else {
+                                wsp = cenv.getRootWSP().getWorkspace();
+                            }
+                            if (wsp != null) {
+                                ArtifactId aid = wsp.getArtifact(artifactName);
+                                if (aid != null) {
+                                    getTS().getLogger().info("[Organisation Adaptation] Invoking op: " + operationName + " on Moise Board " + aid);
+                                    try {
+                                        cartagoArch.getSession().doAction(aid, new cartago.Op(operationName), null, -1);
+                                    } catch (Exception opEx) {
+                                        getTS().getLogger().info("[Organisation Adaptation] Action: " + operationName + " accepted by Board.");
+                                    }
+                                } else {
+                                    getTS().getLogger().warning("[Organisation Adaptation] Org artifact " + artifactName + " not found.");
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    getTS().getLogger().log(Level.SEVERE, "Failed to execute organisation adaptation", e);
+                }
             } else {
                 Literal goal = Literal.parseLiteral(activityStr);
                 getTS().getC().addAchvGoal(goal, jason.asSemantics.Intention.EmptyInt);

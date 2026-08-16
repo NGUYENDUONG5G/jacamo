@@ -90,4 +90,23 @@ public class JaCamoProjectTest {
         }
     }
 
+    @Test
+    public void testRecoveryActivitiesExecution() {
+        recovery.PlanAdaptation<jason.asSemantics.Agent> planAct = new recovery.PlanAdaptation<>("plan_x");
+        assertEquals("plan_x", planAct.getSubstitutePlanTrigger());
+
+        recovery.GoalAdaptation<jason.asSemantics.Agent> goalAct = new recovery.GoalAdaptation<>("goal_y", true);
+        assertEquals("goal_y", goalAct.getGoalLiteral());
+        assertTrue(goalAct.isCreateNew());
+
+        recovery.EnvironmentAdaptation<jason.asSemantics.Agent> envAct = new recovery.EnvironmentAdaptation<>("wsp_z", "art_a", "op_b");
+        assertEquals("wsp_z", envAct.getWorkspaceName());
+        assertEquals("art_a", envAct.getArtifactName());
+        assertEquals("op_b", envAct.getOperationName());
+
+        recovery.OrganisationAdaptation<jason.asSemantics.Agent> orgAct = new recovery.OrganisationAdaptation<>("group_team.action_c");
+        assertEquals("group_team.action_c", orgAct.getOrgDetails());
+    }
+
 }
+

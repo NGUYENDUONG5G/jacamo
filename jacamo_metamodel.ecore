@@ -1,0 +1,85 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="jacamo" nsURI="http://jacamo/1.0" nsPrefix="jacamo">
+  <eClassifiers xsi:type="ecore:EClass" name="Manual" />
+  <eClassifiers xsi:type="ecore:EClass" name="Workspace">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="work_environment" eType="#//WorkEnvironment" containment="true" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="artifacts" eType="#//Artifact" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="WorkEnvironment" />
+  <eClassifiers xsi:type="ecore:EClass" name="Artifact">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="manual" eType="#//Manual" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="operations" eType="#//Operation" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Operation">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="observable_properties" eType="#//ObservableProperty" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="observable_events" eType="#//ObservableEvent" upperBound="-1" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="ObservableProperty">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="belief" eType="#//Belief" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="ObservableEvent">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="trigger_event" eType="#//TriggerEvent" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="ExternalAction" eSuperTypes="#//Action">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="operation" eType="#//Operation" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="InternalAction" eSuperTypes="#//Action" />
+  <eClassifiers xsi:type="ecore:EClass" name="Action" />
+  <eClassifiers xsi:type="ecore:EClass" name="Agent">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="plans" eType="#//Plan" upperBound="-1" containment="true" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="trigger_events" eType="#//TriggerEvent" upperBound="-1" containment="true" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="beliefs" eType="#//Belief" upperBound="-1" containment="true" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="goals" eType="#//Goal" upperBound="-1" containment="true" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="manual" eType="#//Manual" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="workspaces" eType="#//Workspace" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="artifacts" eType="#//Artifact" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="operations" eType="#//Operation" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="observable_properties" eType="#//ObservableProperty" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="groups" eType="#//Group" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="roles" eType="#//Role" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="social_schemes" eType="#//SocialScheme" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="recovery_activities" eType="#//RecoveryActivity" upperBound="-1" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Plan">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="actions" eType="#//Action" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="TriggerEvent" />
+  <eClassifiers xsi:type="ecore:EClass" name="Belief" />
+  <eClassifiers xsi:type="ecore:EClass" name="Goal">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="failure" eType="#//Failure" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Group">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="groups" eType="#//Group" upperBound="-1" containment="true" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="roles" eType="#//Role" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="SocialScheme">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="missions" eType="#//Mission" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="OrgGoal">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="goal" eType="#//Goal" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="failure" eType="#//Failure" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Role">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="norms" eType="#//Norm" upperBound="-1" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Norm">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="mission" eType="#//Mission" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Mission">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="org_goals" eType="#//OrgGoal" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Condition">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="beliefs" eType="#//Belief" upperBound="-1" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Failure">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="errors" eType="#//Error" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Error">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="conditions" eType="#//Condition" upperBound="-1" containment="true" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="recovery_activities" eType="#//RecoveryActivity" upperBound="-1" containment="true" />
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="RecoveryActivity">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="plans" eType="#//Plan" upperBound="-1" />
+    <eStructuralFeatures xsi:type="ecore:EReference" name="goals" eType="#//Goal" upperBound="-1" />
+  </eClassifiers>
+</ecore:EPackage>
