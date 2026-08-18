@@ -9,35 +9,35 @@ public class DeliverySystem extends Artifact {
     @OPERATION public void init(String initialLoc){
         defineObsProperty("location", initialLoc);
         defineObsProperty("status", "ready");
-        System.out.println("DeliverySystem initialized at: " + initialLoc);
+        defineObsProperty("cargo_locked", true);
+        System.out.println("[Environment] DeliverySystem initialized at: " + initialLoc);
     }
 
     @OPERATION public void reroute() {
-        System.out.println("DEBUG: [Environment] Executing navigation reroute operation to find a detour.");
+        System.out.println("[Environment] Recalculating global route avoidance matrix...");
     }
 
-    @OPERATION public void speedUp() {
-        System.out.println("DEBUG: [Environment] Adjusting vehicle speed to offset delivery delays.");
+    @OPERATION public void emergency_brake() {
+        System.out.println("[Environment] EMERGENCY BRAKE ENGAGED! Flashing hazard lights, sounding buzzer, broadcasting GPS coordinates to rescue team.");
     }
 
-    @OPERATION public void find_gas_station() {
-        System.out.println("DEBUG: [Environment] Scanning navigation database for nearby gas stations.");
+    @OPERATION public void lock_cargo() {
+        ObsProperty locked = getObsProperty("cargo_locked");
+        if (locked != null) locked.updateValue(true);
+        System.out.println("[Environment] Cargo hatch securely LOCKED.");
+    }
+
+    @OPERATION public void unlock_cargo() {
+        ObsProperty locked = getObsProperty("cargo_locked");
+        if (locked != null) locked.updateValue(false);
+        System.out.println("[Environment] Cargo hatch UNLOCKED for customer.");
     }
 
     @OPERATION public void arrive(String dest) {
-        try {
-            ObsProperty locProp = getObsProperty("location");
-            ObsProperty statusProp = getObsProperty("status");
-            if (locProp != null) {
-                locProp.updateValue(dest);
-            }
-            if (statusProp != null) {
-                statusProp.updateValue("delivered");
-            }
-            System.out.println("DeliverySystem: Vehicle arrived at " + dest);
-            signal("arrived");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        ObsProperty locProp = getObsProperty("location");
+        ObsProperty statusProp = getObsProperty("status");
+        if (locProp != null) locProp.updateValue(dest);
+        if (statusProp != null) statusProp.updateValue("arrived");
+        System.out.println("[Environment] Vehicle arrived at: " + dest);
     }
 }

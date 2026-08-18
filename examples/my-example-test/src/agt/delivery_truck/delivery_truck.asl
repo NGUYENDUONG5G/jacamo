@@ -1,129 +1,174 @@
 { include("$jacamo/templates/common-moise.asl") }
 { include("$moise/asl/org-obedient.asl") }
-
 { include("delivery_truck/belief.asl") }
 
-!deliver_on_time.
 
-+!safe_setup
-   <- .recovery_setup("init");
-      joinWorkspace("/main/w1", WId);
+battery_level(85).            // Mức pin (%)
+package_weight(15).           // Trọng lượng gói hàng (kg)
+pickup_method(robot_arm).     // robot_arm | manual_scan
+avoidance_mode(yield).        // dynamic_avoid | yield
+auth_method(qr).              // otp | qr | face_id
+next_action_mode(next_order). // next_order | charging_dock | idle
+
+!deliver_success.
+
+
++!deliver_success
+   <- .print("=================================================================");
+      .print("🚀 [G0] BẮT ĐẦU QUY TRÌNH GIAO HÀNG TỰ HÀNH...");
+      .print("=================================================================");
+      !setup_workspace;
+      !pickup_package;
+      !transit_to_delivery;
+      !handover_package;
+      !complete_cycle;
+      .print("=================================================================");
+      .print("🎉 [G0] HOÀN TẤT TOÀN BỘ QUY TRÌNH GIAO HÀNG THÀNH CÔNG!");
+      .print("=================================================================").
+
++!setup_workspace
+   <- joinWorkspace("/main/w1", WId);
       lookupArtifact("navigation", ArtId)[wid(WId)];
-      +counter_id(ArtId);
+      +nav_art(ArtId);
       joinWorkspace("/main/o1", OrgWId);
-      !wait_and_adopt_role(OrgWId).
-
-+!wait_and_adopt_role(OrgWId)
-   <- lookupArtifact("my_team", GrId)[wid(OrgWId)];
-      adoptRole(dispatcher)[artifact_id(GrId)];
-      adoptRole(truck)[artifact_id(GrId)];
+      lookupArtifact("my_team", GrId)[wid(OrgWId)];
+      adoptRole(delivery_robot)[artifact_id(GrId)];
       focus(GrId);
-      !report_status("dispatcher and truck").
+      .print("✅ [Setup] Đã kết nối Workspace và Tổ chức MoISE thành công.").
 
-+!report_status(Role)
-   :  setup_failed 
-   <- .my_name(Me);
-      .print("--> [KHÔI PHỤC THÀNH CÔNG] ", Me, " đã khôi phục lỗi kết nối và gia nhập tổ chức với vai trò ", Role, "!");
-      -setup_failed.
++!pickup_package
+   <- .print("📦 [G1] Bắt đầu [Nhận & Lấy hàng]...");
+      !move_to_pickup;
+      !load_and_verify_package;
+      .print("✅ [G1] Hoàn thành lấy hàng thành công.").
 
-+!report_status(Role)
-   <- .my_name(Me);
-      .print("--> [THÀNH CÔNG TRƠN TRU] ", Me, " đã khởi tạo và gia nhập tổ chức với vai trò ", Role, " ngay từ đầu (không gặp lỗi)!").
++!move_to_pickup
+   <- ?nav_art(ArtId);
+      .print("  ↳ [G1.1] Di chuyển đến điểm lấy hàng (Kho A)...");
+      .wait(300);
+      arrive("warehouse_dock_A")[artifact_id(ArtId)];
+      .print("  ↳ [G1.1] Đã đến điểm lấy hàng.").
 
-+!plan_route
-   <- .recovery_setup("route");
-      goalAchieved(plan_route).
 
-+!deliver_on_time
-   :  setup_failed & refueled
-   <- .my_name(Me);
-      ?counter_id(ArtId);
-      .recovery_fuel(2);
-      arrive("customer_address")[artifact_id(ArtId)];
-      goalAchieved(deliver_on_time).
++!load_and_verify_package : pickup_method(robot_arm)
+   <- .print("  ↳ [G1.2 - Plan 1.2a] Bốc kiện hàng tự động qua Robot Arm...");
+      .wait(300);
+      +package_loaded;
+      .print("  ↳ [G1.2] Đã bốc hàng và kiểm tra hợp lệ.").
 
-+!deliver_on_time
-   :  setup_failed
-   <- .my_name(Me);
-      .recovery_traffic(2);
-      .recovery_fuel(1).
++!load_and_verify_package : pickup_method(manual_scan)
+   <- .print("  ↳ [G1.2 - Plan 1.2b] Nhân viên kho quét Barcode và bốc hàng thủ công...");
+      .wait(300);
+      +package_loaded;
+      .print("  ↳ [G1.2] Nhân viên xác nhận kiện hàng hợp lệ.").
 
-+!deliver_on_time
-   :  using_paper_map
-   <- .my_name(Me);
-      .recovery_traffic(1);
-      +setup_failed.
 
-+!deliver_on_time
-   :  not counter_id(_)
-   <- .a;
-      !safe_setup;
-      .my_name(Me);
-      .print("Dispatcher (delivery_truck): Starting GPS system...").
++!transit_to_delivery
+   <- .print("🚚 [G2] Bắt đầu [Di chuyển đến điểm giao]...");
+      !plan_global_path;
+      !local_navigation;
+      .print("✅ [G2] Đã đến điểm giao an toàn.").
 
-+!deliver_on_time
-   :  counter_id(_) & not setup_failed & not using_paper_map
-   <- .print("Moise delivery obligation registered. GPS status check in progress...").
++!plan_global_path
+   <- ?nav_art(ArtId);
+      .print("  ↳ [G2.1] Lập lộ trình toàn cục (Global Path)...");
+      reroute[artifact_id(ArtId)];
+      .wait(300).
 
-+!use_paper_map
-   <- .print("GPS broken! Switching to paper map plan...");
-      +using_paper_map;
-      !deliver_on_time.
 
-+!refuel
-   <- .recovery_refuel(1);
++!local_navigation : avoidance_mode(dynamic_avoid)
+   <- .print("  ↳ [G2.2 - Plan 2.2a] Phát hiện vật cản động: Lái vòng tránh an toàn...");
+      .wait(400);
+      ?nav_art(ArtId);
+      arrive("customer_address_123")[artifact_id(ArtId)].
+
++!local_navigation : avoidance_mode(yield)
+   <- .print("  ↳ [G2.2 - Plan 2.2b] Phát hiện vật cản: Dừng nhường đường (Yield & Wait)...");
+      .wait(400);
+      ?nav_art(ArtId);
+      arrive("customer_address_123")[artifact_id(ArtId)].
+
+
++!handover_package
+   <- .print("🤝 [G3] Bắt đầu [Bàn giao kiện hàng]...");
+      !authenticate_receiver;
+      !unlock_and_release;
+      .print("✅ [G3] Bàn giao kiện hàng thành công.").
+
+
++!authenticate_receiver : auth_method(otp)
+   <- .print("  ↳ [G3.1 - Plan 3.1a] Xác thực khách hàng qua mã OTP/SMS...");
+      .wait(300);
+      .print("  ↳ [G3.1] OTP chính xác!").
+
++!authenticate_receiver : auth_method(qr)
+   <- .print("  ↳ [G3.1 - Plan 3.1b] Quét mã QR trên ứng dụng của khách hàng...");
+      .wait(300);
+      .print("  ↳ [G3.1] QR hợp lệ!").
+
++!authenticate_receiver : auth_method(face_id)
+   <- .print("  ↳ [G3.1 - Plan 3.1c] Nhận diện khuôn mặt người nhận (FaceID)...");
+      .wait(300);
+      .print("  ↳ [G3.1] FaceID xác thực thành công!").
+
++!unlock_and_release
+   <- ?nav_art(ArtId);
+      .print("  ↳ [G3.2] Mở khóa thùng chứa và nhả kiện hàng...");
+      unlock_cargo[artifact_id(ArtId)];
+      .wait(400);
+      lock_cargo[artifact_id(ArtId)];
+      .print("  ↳ [G3.2] Khách hàng đã lấy hàng, thùng xe đã khóa an toàn.").
+
+
++!complete_cycle : battery_level(B) & B > 30 & next_action_mode(next_order)
+   <- .print("🔄 [G4 - Plan 4.1] Pin còn tốt (", B, "% > 30%): Sẵn sàng nhận đơn hàng kế tiếp!").
+
++!complete_cycle : battery_level(B) & B <= 30
+   <- .print("⚡ [G4 - Plan 4.2] Pin yếu (", B, "% <= 30%): Di chuyển về trạm sạc tự động...");
+      ?nav_art(ArtId);
+      arrive("charging_dock_1")[artifact_id(ArtId)];
+      .wait(300);
+      .print("⚡ [G4 - Plan 4.2] Đã kết nối nguồn sạc thành công.").
+
++!complete_cycle : next_action_mode(idle)
+   <- .print("🅿️ [G4 - Plan 4.3] Chuyển trạng thái nghỉ (Idle) tại bãi đỗ.").
+
+
+
+
++!cancel_and_log_wms
+   <- .print("⚠️ [RECOVERY PLAN 1] Lấy hàng thất bại: Đang hủy đơn trên hệ thống, gửi log về WMS và tìm đơn khác...");
       .wait(500);
-      +refueled;
-      .recovery_refuel(2);
-      !deliver_on_time.
+      .print("⚠️ [RECOVERY PLAN 1] Đơn hàng đã hủy thành công, chuyển sang nhận đơn kế tiếp.").
 
-+location(Loc)
-   <- .recovery_location(Loc).
 
-// Specific goal failure handler for safe_setup
--!safe_setup
-   <- .my_name(Me);
-      .a; 
-      .print(Me, " khởi tạo thất bại. Đang thử lại toàn bộ quá trình thiết lập...");
-      +setup_failed; 
-      .wait(200);
-      !safe_setup.
++!reroute_new_path
+   <- ?nav_art(ArtId);
+      .print("⚠️ [RECOVERY PLAN 2.1] Đường bị chặn (Deadlock): Kích hoạt tính lại lộ trình tránh điểm tắc nghẽn...");
+      reroute[artifact_id(ArtId)];
+      +reroute_done;
+      .print("⚠️ [RECOVERY PLAN 2.1] Đã tìm được đường mới! Tiếp tục hành trình...").
 
-// Specific goal failure handler for wait_and_adopt_role
--!wait_and_adopt_role(OrgWId)
-   <- .my_name(Me);
-      .a; 
-      .print(Me, " đang đợi nhóm my_team được tạo...");
-      +setup_failed;
-      .wait(200);
-      !wait_and_adopt_role(OrgWId).
++!emergency_rescue
+   <- ?nav_art(ArtId);
+      .print("🚨 [RECOVERY PLAN 2.2] KHẨN CẤP (Mất cảm biến/Hết pin): Phanh dừng xe, bật đèn cảnh báo, gửi tọa độ cứu hộ...");
+      emergency_brake[artifact_id(ArtId)];
+      +emergency_handled;
+      .print("🚨 [RECOVERY PLAN 2.2] Đã gửi tín hiệu cứu hộ thành công.").
 
-// Specific goal failure handler for plan_route
--!plan_route
-   <- .my_name(Me);
-      .print("[RECOVERY] Lỗi khi thực hiện lập lộ trình giao hàng (plan_route). Đang thử lại...");
-      .wait(500);
-      !plan_route.
 
-// Specific goal failure handler for deliver_on_time
--!deliver_on_time
-   <- .my_name(Me);
-      .print("[RECOVERY] Lỗi khi thực hiện giao hàng đúng giờ (deliver_on_time). Đang thử lại...");
-      .wait(500);
-      !deliver_on_time.
++!return_to_warehouse
+   <- ?nav_art(ArtId);
+      .print("⚠️ [RECOVERY PLAN 3] Giao hàng không thành công: Khóa thùng bảo mật, đánh dấu đơn hoàn và chở hàng về kho...");
+      lock_cargo[artifact_id(ArtId)];
+      +return_initiated;
+      arrive("warehouse_dock_A")[artifact_id(ArtId)];
+      .print("⚠️ [RECOVERY PLAN 3] Đã nhập kho lại kiện hàng.").
 
-// Specific goal failure handler for refuel
--!refuel
-   <- .my_name(Me);
-      .print("[RECOVERY] Thất bại khi nạp nhiên liệu. Đang thử lại...");
-      .wait(500);
-      !refuel.
 
-// Fallback generic goal failure handler to catch any other goal failures of the agent
--!G[error(ErrId), error_msg(Msg), code_src(SrcFile), code_line(SrcLine)]
-   <- .my_name(Me);
-      .print("[FAIL-SAFE] Agent ", Me, " gặp lỗi khi thực hiện goal '!", G, "' tại dòng ", SrcLine, " trong file '", SrcFile, "'. Mã lỗi: ", ErrId, ". Chi tiết: ", Msg).
-
--!G
-   <- .my_name(Me);
-      .print("[FAIL-SAFE] Agent ", Me, " gặp lỗi khi thực hiện goal '!", G, "' (Không có thông tin chi tiết về lỗi).").
++!standby_sleep_mode
+   <- ?nav_art(ArtId);
+      .print("⚠️ [RECOVERY PLAN 4] Không thể sạc tại dock: Di chuyển sang bãi đỗ phụ, bật chế độ ngủ sâu (Sleep Mode) và gửi cảnh báo kỹ thuật viên...");
+      arrive("auxiliary_parking")[artifact_id(ArtId)];
+      +sleep_mode_active;
+      .print("⚠️ [RECOVERY PLAN 4] Robot đã vào chế độ ngủ sâu an toàn.").

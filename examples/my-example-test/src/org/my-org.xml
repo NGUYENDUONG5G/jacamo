@@ -12,42 +12,43 @@
     <structural-specification>
         <role-definitions>
             <role id="dispatcher" />
-            <role id="truck" />
+            <role id="delivery_robot" />
         </role-definitions>
 
         <group-specification id="team">
             <roles>
                 <role id="dispatcher" min="1" max="1" />
-                <role id="truck" min="1" max="10" />
+                <role id="delivery_robot" min="1" max="10" />
             </roles>
             <formation-constraints>
-                <compatibility from="dispatcher" to="truck" scope="intra-group" bi-dir="true"/>
+                <compatibility from="dispatcher" to="delivery_robot" scope="intra-group" bi-dir="true"/>
             </formation-constraints>
         </group-specification>
     </structural-specification>
 
     <functional-specification>
         <scheme id="delivery_scheme">
-            <goal id="deliver_package">
+            <goal id="deliver_success">
                 <plan operator="sequence">
-                    <goal id="plan_route" />
-                    <goal id="deliver_on_time" />
+                    <goal id="pickup_package" />
+                    <goal id="transit_to_delivery" />
+                    <goal id="handover_package" />
+                    <goal id="complete_cycle" />
                 </plan>
             </goal>
 
-            <mission id="dispatch_mission" min="1" max="1">
-                <goal id="plan_route" />
-            </mission>
-            
             <mission id="delivery_mission" min="1" max="10">
-                <goal id="deliver_on_time" />
+                <goal id="deliver_success" />
+                <goal id="pickup_package" />
+                <goal id="transit_to_delivery" />
+                <goal id="handover_package" />
+                <goal id="complete_cycle" />
             </mission>
         </scheme>
     </functional-specification>
 
     <normative-specification>
-        <norm id="n1" type="obligation" role="dispatcher" mission="dispatch_mission" />
-        <norm id="n2" type="obligation" role="truck" mission="delivery_mission" />
+        <norm id="n1" type="obligation" role="delivery_robot" mission="delivery_mission" />
     </normative-specification>
 
 </organisational-specification>

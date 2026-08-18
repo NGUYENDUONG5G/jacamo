@@ -70,7 +70,7 @@ public class ExtendedAgent extends Agent {
                             public boolean evaluate(ExtendedAgent agent) {
                                 try {
                                     jason.asSyntax.Literal condLiteral = jason.asSyntax.ASSyntax.parseLiteral(condStr);
-                                    return agent.getBB().contains(condLiteral) != null;
+                                    return agent.believes(condLiteral, new jason.asSemantics.Unifier());
                                 } catch (Exception e) {
                                     return false;
                                 }
@@ -111,7 +111,7 @@ public class ExtendedAgent extends Agent {
                                 for (String condStr : eParam.getConditions()) {
                                     jason.asSyntax.Literal condLiteral = jason.asSyntax.ASSyntax.parseLiteral(condStr);
                                     jason.asSyntax.Literal matched = agent.getBB().contains(condLiteral);
-                                    if (matched != null) {
+                                    if (matched != null && !matched.isRule()) {
                                         agent.getBB().remove(matched);
                                         agent.getTS().getLogger().info("[Failure Monitor] Đã xóa niềm tin lỗi: " + matched);
                                     }
