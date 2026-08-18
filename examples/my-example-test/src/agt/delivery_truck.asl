@@ -1,28 +1,14 @@
 { include("$jacamo/templates/common-moise.asl") }
 { include("$moise/asl/org-obedient.asl") }
 
-!start.
+{ include("childGoal_delivery_truck.asl") }
+{ include("recovery_delivery_truck.asl") }
 
-{ include("recovery.asl") }
+!start.
 
 +!start
    <- .a;
       !safe_setup.
-
-+!safe_setup
-   <- .recovery_setup("init");
-      joinWorkspace("/main/w1", WId);
-      lookupArtifact("navigation", ArtId)[wid(WId)];
-      +counter_id(ArtId);
-      joinWorkspace("/main/o1", OrgWId);
-      !wait_and_adopt_role(OrgWId).
-
-+!wait_and_adopt_role(OrgWId)
-   <- lookupArtifact("my_team", GrId)[wid(OrgWId)];
-      adoptRole(dispatcher)[artifact_id(GrId)];
-      adoptRole(truck)[artifact_id(GrId)];
-      focus(GrId);
-      !report_status("dispatcher and truck").
 
 +!plan_route
    <- .recovery_setup("route");
@@ -54,18 +40,3 @@
    <- .my_name(Me);
       .print("Dispatcher (delivery_truck): Starting GPS system...");
       +gps(broken).
-
-+!use_paper_map
-   <- .print("GPS broken! Switching to paper map plan...");
-      +using_paper_map;
-      !deliver_on_time.
-
-+!refuel
-   <- .recovery_refuel(1);
-      .wait(500);
-      +refueled;
-      .recovery_refuel(2);
-      !deliver_on_time.
-
-+location(Loc)
-   <- .recovery_location(Loc).
