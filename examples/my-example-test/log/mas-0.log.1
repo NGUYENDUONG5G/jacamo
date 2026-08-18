@@ -1,0 +1,49 @@
+[FailureModel] Initializing FailureModel platform...
+[Moise] OrgBoard o1 created.
+[Moise] scheme created: s1: delivery_scheme using artifact SchemeBoard
+[Moise] group created: my_team: team using artifact ora4mas.nopl.GroupBoard
+[Cartago] Workspace w1 created.
+[Cartago] artifact navigation: tools.DeliverySystem("warehouse") at w1 created.
+[FailureModel] Starting FailureModel platform...
+[delivery_truck] [ExtendedAgent] Đã đăng ký giám sát failure cho goal: deliver_on_time
+[delivery_truck] Đã khôi phục mục tiêu: safe_setup
+[delivery_truck] DeliveryTruck đang chuẩn bị thiết lập môi trường giao hàng...
+[delivery_truck] I am obliged to commit to dispatch_mission on s1... doing so
+[delivery_truck] I am obliged to commit to delivery_mission on s1... doing so
+[delivery_truck] --> [THÀNH CÔNG TRƠN TRU] delivery_truck đã khởi tạo và gia nhập tổ chức với vai trò dispatcher and truck ngay từ đầu (không gặp lỗi)!
+[delivery_truck] Dispatcher (delivery_truck): Đang lập lộ trình giao hàng tối ưu...
+[delivery_truck] Dispatcher (delivery_truck): Starting GPS system...
+[delivery_truck] [Failure Monitor] Goal 'deliver_on_time' failed due to error trigger.
+[delivery_truck] [Error Handler] Triggering recovery for: gps_failed
+[delivery_truck] [Adaptation -> Plan] Selecting/Triggering plan: use_paper_map
+[delivery_truck] [Failure Monitor] Đã tự động khôi phục và xử lý lỗi: gps_failed
+[delivery_truck] [Failure Monitor] Đã xóa niềm tin lỗi: gps(broken)
+[delivery_truck] GPS broken! Switching to paper map plan...
+[delivery_truck] Truck (delivery_truck): Bắt đầu thực hiện mục tiêu giao hàng đúng giờ deliver_on_time lần đầu...
+[delivery_truck] Phát hiện kẹt xe nghiêm trọng! Kích hoạt Failure Model bằng cách thêm niềm tin traffic(congested)...
+[delivery_truck] I am not obliged to achieve deliver_on_time for scheme s1 anymore, dropping the intention.
+[delivery_truck] [Failure Monitor] Goal 'deliver_on_time' failed due to error trigger.
+[delivery_truck] [Error Handler] Triggering recovery for: delivery_delayed
+[delivery_truck] [Adaptation -> Goal] Creating and triggering new Goal: plan_route
+[delivery_truck] [Adaptation -> Goal] Creating and triggering new Goal: deliver_on_time
+[delivery_truck] [Adaptation -> Environment] Target workspace: w1, artifact: navigation, operation: speedUp
+[delivery_truck] [Environment Adaptation] Invoking op: speedUp on navigation
+[delivery_truck] [Adaptation -> Organisation] Executing organisation action: my_team.upgrade_priority
+[delivery_truck] [Organisation Adaptation] Invoking op: upgrade_priority on Moise Board my_team
+[delivery_truck] [Failure Monitor] Đã tự động khôi phục và xử lý lỗi: delivery_delayed
+[delivery_truck] [Failure Monitor] Đã xóa niềm tin lỗi: traffic(congested)
+[delivery_truck] Dispatcher (delivery_truck): Đang lập lộ trình giao hàng tối ưu...
+[delivery_truck] Truck (delivery_truck): Đang thực hiện lại mục tiêu deliver_on_time với tốc độ cao hơn sau khi khôi phục kẹt xe...
+[delivery_truck] Đột ngột phát hiện kim xăng chỉ về 0! Xe hết xăng! Kích hoạt Failure Model bằng cách thêm niềm tin fuel(empty)...
+[delivery_truck] [Failure Monitor] Goal 'deliver_on_time' failed due to error trigger.
+[delivery_truck] [Error Handler] Triggering recovery for: out_of_fuel
+[delivery_truck] [Adaptation -> Goal] Creating and triggering new Goal: refuel
+[delivery_truck] [Adaptation -> Environment] Target workspace: w1, artifact: navigation, operation: find_gas_station
+[delivery_truck] [Environment Adaptation] Invoking op: find_gas_station on navigation
+[delivery_truck] [Adaptation -> Organisation] Executing organisation action: my_team.request_fuel_allowance
+[delivery_truck] [Organisation Adaptation] Invoking op: request_fuel_allowance on Moise Board my_team
+[delivery_truck] [Failure Monitor] Đã tự động khôi phục và xử lý lỗi: out_of_fuel
+[delivery_truck] [Failure Monitor] Đã xóa niềm tin lỗi: fuel(empty)
+[delivery_truck] Truck (delivery_truck): Đang thực hiện mục tiêu cứu trợ refuel...
+[delivery_truck] Truck (delivery_truck): Đã tiếp nhiên liệu thành công!
+[delivery_truck] Truck (delivery_truck): Nhiên liệu đầy, bắt đầu chặng cuối giao hàng đúng giờ deliver_on_time!

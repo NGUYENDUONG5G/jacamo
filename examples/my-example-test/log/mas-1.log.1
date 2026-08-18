@@ -1,0 +1,17 @@
+[FailureModel] Initializing FailureModel platform...
+[Include] The included file 'childGoal_delivery_truck.asl' was not found! (it is being included in the agent 'delivery_truck')
+[Include] The included file 'recovery_delivery_truck.asl' was not found! (it is being included in the agent 'delivery_truck')
+[Moise] OrgBoard o1 created.
+[Moise] scheme created: s1: delivery_scheme using artifact SchemeBoard
+[Moise] group created: my_team: team using artifact ora4mas.nopl.GroupBoard
+[Cartago] Workspace w1 created.
+[Cartago] artifact navigation: tools.DeliverySystem("warehouse") at w1 created.
+[FailureModel] Starting FailureModel platform...
+[delivery_truck] [ExtendedAgent] Đã đăng ký giám sát failure cho goal: deliver_on_time
+[delivery_truck] Đã khôi phục mục tiêu: safe_setup
+[delivery_truck] No fail event was generated for +!safe_setup[source(self)]
+[delivery_truck] 
+intention 2: 
+    +!start[source(self)] <- ... !safe_setup / {}
+
+[delivery_truck] Found a goal for which there is no relevant plan: +!safe_setup[source(self)]

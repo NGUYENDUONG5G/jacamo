@@ -1,6 +1,6 @@
 mas my_example {
 
-    agent delivery_truck {
+    agent delivery_truck : delivery_truck/delivery_truck.asl {
         ag-class: jacamo.platform.ExtendedAgent
         join: w1
         focus: w1.navigation
