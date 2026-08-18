@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JaCaMo Goal Modeler - Visual ASL & Belief Studio</title>
+  <title>JaCaMo Goal Studio - Visual Goal Modeler</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29,7 +29,7 @@
         </div>
         <div class="brand-text">
           <span class="brand-title">JaCaMo <span class="highlight">Goal Studio</span></span>
-          <span class="brand-badge">AgentSpeak & Belief Modeler</span>
+          <span class="brand-badge">Visual Goal Model Tree (Port 3274)</span>
         </div>
       </div>
 
@@ -40,7 +40,7 @@
         </div>
         <div class="status-indicator">
           <span class="status-dot"></span>
-          <span id="modelStats">Goals: 5 | Plans: 11 | Belief Rules: 8</span>
+          <span id="modelStats">Goals: 12 | Decompositions: 11</span>
         </div>
       </div>
 
@@ -85,83 +85,8 @@
       </div>
     </header>
 
-    <!-- Main Workspace Area -->
-    <div class="main-body">
-      <!-- Left Sidebar: Palette & Node Library -->
-      <aside class="sidebar left-sidebar" id="leftSidebar">
-        <div class="sidebar-header">
-          <h3>Palette Thiết Kế</h3>
-          <span class="badge-hint">Kéo / Click để thêm</span>
-        </div>
-
-        <div class="palette-group">
-          <div class="palette-title">Goal Model Elements</div>
-          
-          <div class="palette-item" draggable="true" data-type="goal" title="Thêm Goal mới (Mục tiêu gốc hoặc Subgoal)">
-            <div class="palette-icon icon-goal">🎯</div>
-            <div class="palette-info">
-              <span class="palette-name">Goal (!goal)</span>
-              <span class="palette-desc">Mục tiêu cần đạt</span>
-            </div>
-          </div>
-
-          <div class="palette-item" draggable="true" data-type="plan" title="Thêm Plan (Kế hoạch thực thi với Pre-condition)">
-            <div class="palette-icon icon-plan">📋</div>
-            <div class="palette-info">
-              <span class="palette-name">Plan (+!goal : ctx)</span>
-              <span class="palette-desc">Kế hoạch có điều kiện</span>
-            </div>
-          </div>
-
-          <div class="palette-item" draggable="true" data-type="recovery" title="Thêm Recovery Plan (Xử lý sự cố / Thích ứng)">
-            <div class="palette-icon icon-recovery">⚡</div>
-            <div class="palette-info">
-              <span class="palette-name">Recovery Plan</span>
-              <span class="palette-desc">Xử lý lỗi Failure Model</span>
-            </div>
-          </div>
-
-          <div class="palette-item" draggable="true" data-type="belief_rule" title="Thêm Belief Rule (Luật suy diễn niềm tin)">
-            <div class="palette-icon icon-belief">🧠</div>
-            <div class="palette-info">
-              <span class="palette-name">Belief Rule (:- )</span>
-              <span class="palette-desc">Luật suy diễn belief.asl</span>
-            </div>
-          </div>
-
-          <div class="palette-item" draggable="true" data-type="belief_fact" title="Thêm Belief ban đầu (Facts)">
-            <div class="palette-icon icon-fact">💡</div>
-            <div class="palette-info">
-              <span class="palette-name">Initial Belief</span>
-              <span class="palette-desc">Niềm tin khởi tạo</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Tree Hierarchy Outline -->
-        <div class="sidebar-section-divider"></div>
-        <div class="sidebar-header">
-          <h3>Cây Phân Rã Goal</h3>
-          <button class="btn-icon" id="btnCollapseTree" title="Thu gọn / Mở rộng">↕</button>
-        </div>
-        <div class="goal-tree-explorer" id="goalTreeExplorer">
-          <!-- Dynamic Tree Rendered Here -->
-        </div>
-
-        <!-- Quick Stats & Health Check -->
-        <div class="health-card" id="healthCard">
-          <div class="health-header">
-            <span class="health-title">Kiểm tra hợp lệ</span>
-            <span class="health-status-badge ok" id="healthBadge">Hợp lệ</span>
-          </div>
-          <div class="health-list" id="healthList">
-            <div class="health-item ok">✓ Đã cấu hình Root Goal</div>
-            <div class="health-item ok">✓ 100% Subgoals có Plan</div>
-            <div class="health-item ok">✓ Đầy đủ Recovery Plans</div>
-          </div>
-        </div>
-      </aside>
-
+    <!-- Main Workspace Area (Full Width Canvas, Sidebars removed) -->
+    <div class="main-body full-width-body">
       <!-- Center Main Content Tabs -->
       <main class="center-content">
         <!-- View Mode Navigation Tabs -->
@@ -169,7 +94,7 @@
           <div class="tabs-left">
             <button class="view-tab active" data-view="canvas">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              Sơ đồ Goal Canvas
+              Sơ đồ Goal Model Tree
             </button>
             <button class="view-tab" data-view="code">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
@@ -235,6 +160,27 @@
             <div class="minimap-container" id="minimapContainer">
               <svg id="minimapSvg"></svg>
               <div class="minimap-viewport" id="minimapViewport"></div>
+            </div>
+
+            <!-- Floating Action Button (FAB) Speed Dial for Goals & Links -->
+            <div class="canvas-fab-container" id="canvasFabContainer">
+              <div class="fab-menu" id="fabMenu">
+                <button class="fab-item" id="btnFabAddGoal" title="Thêm Goal mới vào sơ đồ">
+                  <span class="fab-item-icon">🎯</span>
+                  <span class="fab-item-label">Thêm Goal Mới</span>
+                </button>
+                <button class="fab-item" id="btnFabAddLink" title="Tạo liên kết phân rã giữa 2 Goal">
+                  <span class="fab-item-icon">🔗</span>
+                  <span class="fab-item-label">Tạo Liên Kết Phân Rã</span>
+                </button>
+                <button class="fab-item" id="btnFabAddSubgoal" title="Thêm Sub-Goal con">
+                  <span class="fab-item-icon">↳</span>
+                  <span class="fab-item-label">Thêm Sub-Goal</span>
+                </button>
+              </div>
+              <button class="fab-main-btn" id="fabMainBtn" title="Thao tác thêm Goal & Liên kết">
+                <span class="fab-icon" id="fabMainIcon">+</span>
+              </button>
             </div>
           </div>
         </div>
@@ -393,102 +339,127 @@
           </div>
         </div>
       </main>
+    </div>
 
-      <!-- Right Sidebar: Inspector / Property Editor -->
-      <aside class="sidebar right-sidebar" id="rightSidebar">
-        <div class="sidebar-header">
-          <h3 id="inspectorTitle">Chi Tiết Phần Tử</h3>
-          <span class="element-badge" id="selectedNodeTypeBadge">Không chọn</span>
+    <!-- Modal 1: Quick Add Goal Dialog -->
+    <div class="modal-backdrop" id="modalAddGoal">
+      <div class="modal-dialog modal-dialog-sm">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span class="modal-icon">🎯</span>
+            <h3>Thêm Goal Mới</h3>
+          </div>
+          <button class="btn-icon" id="btnCloseAddGoalModal">✕</button>
         </div>
-
-        <div id="inspectorEmptyState" class="empty-inspector">
-          <div class="empty-icon">🖱️</div>
-          <p>Chọn một Goal, Plan, Recovery Plan hoặc Belief Rule trên sơ đồ để chỉnh sửa thuộc tính.</p>
-        </div>
-
-        <form id="inspectorForm" class="inspector-form hidden">
-          <!-- Goal Properties -->
-          <div class="form-group goal-only">
-            <label for="propGoalName">Tên Goal (Functor)</label>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="newGoalNameInput">Tên Goal (Functor)</label>
             <div class="input-with-prefix">
               <span class="prefix">!</span>
-              <input type="text" id="propGoalName" class="form-control" placeholder="deliver_success" />
+              <input type="text" id="newGoalNameInput" class="form-control" placeholder="deliver_package" />
             </div>
           </div>
-
-          <div class="form-group goal-only">
-            <label for="propGoalDesc">Mô tả / Nhãn hiển thị</label>
-            <input type="text" id="propGoalDesc" class="form-control" placeholder="Bắt đầu quy trình giao hàng" />
+          <div class="form-group">
+            <label for="newGoalDescInput">Mô tả / Nhãn hiển thị</label>
+            <input type="text" id="newGoalDescInput" class="form-control" placeholder="Giao kiện hàng cho khách" />
           </div>
+          <div class="form-group">
+            <label for="newGoalDecompSelect">Kiểu phân rã (Decomposition)</label>
+            <select id="newGoalDecompSelect" class="form-control">
+              <option value="AND">AND-Decomposition (Thực hiện tuần tự tất cả)</option>
+              <option value="OR">OR-Decomposition (Lựa chọn nhánh)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="newGoalParentSelect">Mục tiêu cha (Parent Goal - Tùy chọn)</label>
+            <select id="newGoalParentSelect" class="form-control">
+              <option value="">-- Không có (Mục tiêu độc lập) --</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnCancelAddGoal">Hủy</button>
+          <button class="btn btn-primary" id="btnConfirmAddGoal">✓ Thêm Goal</button>
+        </div>
+      </div>
+    </div>
 
-          <div class="form-group goal-only">
-            <label for="propDecompType">Kiểu phân rã Sub-goals</label>
-            <select id="propDecompType" class="form-control">
+    <!-- Modal 2: Add Decomposition Link Dialog -->
+    <div class="modal-backdrop" id="modalAddLink">
+      <div class="modal-dialog modal-dialog-sm">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span class="modal-icon">🔗</span>
+            <h3>Tạo Liên Kết Phân Rã (Decomposition)</h3>
+          </div>
+          <button class="btn-icon" id="btnCloseAddLinkModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="linkParentSelect">Mục tiêu Cha (Parent Goal)</label>
+            <select id="linkParentSelect" class="form-control"></select>
+          </div>
+          <div class="form-group">
+            <label for="linkChildSelect">Phân rã sang Mục tiêu Con (Sub-Goal)</label>
+            <select id="linkChildSelect" class="form-control"></select>
+          </div>
+          <div class="form-group">
+            <label for="linkDecompTypeSelect">Kiểu liên kết</label>
+            <select id="linkDecompTypeSelect" class="form-control">
+              <option value="AND">AND-Decomposition (Đường nét liền xanh Cyan)</option>
+              <option value="OR">OR-Decomposition (Đường nét đứt xanh Emerald)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnCancelAddLink">Hủy</button>
+          <button class="btn btn-primary" id="btnConfirmAddLink">🔗 Tạo Liên Kết</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Goal Property Inspector Modal (Opens on node click) -->
+    <div class="modal-backdrop" id="modalGoalInspector">
+      <div class="modal-dialog modal-dialog-sm">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span class="modal-icon">🎯</span>
+            <h3 id="modalInspectorTitle">Chi Tiết Goal</h3>
+          </div>
+          <button class="btn-icon" id="btnCloseInspectorModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="modalGoalName">Tên Goal (Functor)</label>
+            <div class="input-with-prefix">
+              <span class="prefix">!</span>
+              <input type="text" id="modalGoalName" class="form-control" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="modalGoalDesc">Mô tả / Nhãn hiển thị</label>
+            <input type="text" id="modalGoalDesc" class="form-control" />
+          </div>
+          <div class="form-group">
+            <label for="modalGoalDecomp">Kiểu phân rã Sub-goals</label>
+            <select id="modalGoalDecomp" class="form-control">
               <option value="AND">AND-Decomposition (Tất cả tuần tự)</option>
               <option value="OR">OR-Decomposition (Lựa chọn nhánh)</option>
             </select>
           </div>
-
-          <!-- Plan Properties -->
-          <div class="form-group plan-only">
-            <label for="propPlanTrigger">Kích hoạt (Trigger Goal)</label>
-            <div class="input-with-prefix">
-              <span class="prefix">+!</span>
-              <input type="text" id="propPlanTrigger" class="form-control" placeholder="load_and_verify_package" />
-            </div>
+          <div class="form-group">
+            <label>Danh sách Sub-goals hiện tại:</label>
+            <div id="modalSubgoalsList" class="subgoals-chip-container"></div>
           </div>
-
-          <div class="form-group plan-only">
-            <label for="propPlanContext">Điều kiện ngữ cảnh (Context Guard : )</label>
-            <input type="text" id="propPlanContext" class="form-control" placeholder="pickup_method(robot_arm)" />
-            <span class="field-hint">Điều kiện ràng buộc niềm tin trước khi chọn kế hoạch</span>
+        </div>
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button class="btn btn-danger" id="btnDeleteSelectedGoal">🗑️ Xóa Goal</button>
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-secondary" id="btnCancelGoalEdit">Hủy</button>
+            <button class="btn btn-primary" id="btnSaveGoalEdit">✓ Lưu Thay Đổi</button>
           </div>
-
-          <div class="form-group plan-only recovery-only">
-            <label for="propPlanBody">Nội dung thực thi (Body Actions &lt;- )</label>
-            <textarea id="propPlanBody" class="form-control code-font" rows="5" placeholder=".print(&quot;Executing...&quot;);&#10;!subgoal_name;&#10;+belief_updated."></textarea>
-            <span class="field-hint">Mỗi hành động cách nhau bởi dấu chấm phẩy (;)</span>
-          </div>
-
-          <!-- Recovery Plan Properties -->
-          <div class="form-group recovery-only">
-            <label for="propRecoveryTargetGoal">Mục tiêu mục tiêu gặp lỗi (Target Goal)</label>
-            <input type="text" id="propRecoveryTargetGoal" class="form-control" placeholder="pickup_package" />
-          </div>
-
-          <div class="form-group recovery-only">
-            <label for="propRecoveryErrorName">Tên lỗi (Error Name)</label>
-            <input type="text" id="propRecoveryErrorName" class="form-control" placeholder="arm_disconnected_error" />
-          </div>
-
-          <div class="form-group recovery-only">
-            <label for="propRecoveryConditions">Điều kiện kích hoạt lỗi (Monitored Belief)</label>
-            <input type="text" id="propRecoveryConditions" class="form-control" placeholder="arm_disconnected" />
-          </div>
-
-          <!-- Belief Rule Properties -->
-          <div class="form-group belief-rule-only">
-            <label for="propBeliefHead">Đầu luật suy diễn (Head Predicate)</label>
-            <input type="text" id="propBeliefHead" class="form-control" placeholder="path_blocked" />
-          </div>
-
-          <div class="form-group belief-rule-only">
-            <label for="propBeliefBody">Thân điều kiện (Body Expression :- )</label>
-            <input type="text" id="propBeliefBody" class="form-control" placeholder="road_blocked_detected & not reroute_done" />
-            <span class="field-hint">Các vị từ logic kết hợp bởi &amp;, |, not</span>
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="inspector-actions">
-            <button type="button" class="btn btn-primary btn-block" id="btnApplyProperties">
-              ✓ Lưu & Cập Nhật Sơ Đồ
-            </button>
-            <button type="button" class="btn btn-danger btn-block" id="btnDeleteNode">
-              🗑️ Xóa Phần Tử
-            </button>
-          </div>
-        </form>
-      </aside>
+        </div>
+      </div>
     </div>
 
     <!-- Import Modal (Dual ASL Files) -->

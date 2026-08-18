@@ -24,33 +24,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const beliefAslCodeArea = document.getElementById("beliefAslCodeArea");
   const jcmConfigPreview = document.getElementById("jcmConfigPreview");
 
-  // Inspector Elements
-  const inspectorForm = document.getElementById("inspectorForm");
-  const inspectorEmptyState = document.getElementById("inspectorEmptyState");
-  const inspectorTitle = document.getElementById("inspectorTitle");
-  const selectedNodeTypeBadge = document.getElementById("selectedNodeTypeBadge");
-
-  // Form Fields
-  const propGoalName = document.getElementById("propGoalName");
-  const propGoalDesc = document.getElementById("propGoalDesc");
-  const propDecompType = document.getElementById("propDecompType");
-  const propPlanTrigger = document.getElementById("propPlanTrigger");
-  const propPlanContext = document.getElementById("propPlanContext");
-  const propPlanBody = document.getElementById("propPlanBody");
-  const propRecoveryTargetGoal = document.getElementById("propRecoveryTargetGoal");
-  const propRecoveryErrorName = document.getElementById("propRecoveryErrorName");
-  const propRecoveryConditions = document.getElementById("propRecoveryConditions");
-  const propBeliefHead = document.getElementById("propBeliefHead");
-  const propBeliefBody = document.getElementById("propBeliefBody");
-
   // Load Initial Sample (Delivery Truck MAS Demo)
   loadSample("delivery_truck");
 
   // 3. Model Change Listener (Auto Sync & Refresh)
   model.onChange(() => {
     updateStats();
-    renderTreeExplorer();
-    updateHealthCheck();
     renderRecoveryMatrix();
     syncCodeEditors();
     canvas.render();
@@ -77,10 +56,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // 5. Update Statistics and Labels
   function updateStats() {
     const goalCount = model.goals.size;
-    const planCount = model.plans.size;
-    const recCount = model.recoveryPlans.size;
-    const beliefCount = model.beliefRules.size;
-    modelStats.innerText = `Goals: ${goalCount} | Plans: ${planCount} | Recovery: ${recCount} | Beliefs: ${beliefCount}`;
+    let totalSubgoals = 0;
+    for (let g of model.goals.values()) {
+      totalSubgoals += g.subgoals.length;
+    }
+    modelStats.innerText = `Goals: ${goalCount} | Decompositions: ${totalSubgoals}`;
   }
 
   // 6. Sync Code Editors
@@ -102,64 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (jcmConfigPreview) jcmConfigPreview.textContent = jcmCode;
   }
 
-  // 7. Render Tree Explorer in Left Sidebar
-  function renderTreeExplorer() {
-    const treeContainer = document.getElementById("goalTreeExplorer");
-    if (!treeContainer) return;
-    treeContainer.innerHTML = "";
-
-    const rootGoal = Array.from(model.goals.values()).find(g => g.isRoot || g.name === model.initialGoal) || Array.from(model.goals.values())[0];
-    if (!rootGoal) return;
-
-    function renderNode(g, depth = 0) {
-      const item = document.createElement("div");
-      item.className = `tree-node-item tree-indent-${Math.min(depth, 3)} ${currentSelectedNode && currentSelectedNode.id === g.id ? "active" : ""}`;
-      item.innerHTML = `<span>${depth === 0 ? "👑" : "🎯"}</span> <span>!${g.name}</span> <small style="color:var(--text-muted)">[${g.decompType}]</small>`;
-      item.addEventListener("click", () => {
-        canvas.selectNode(g.id, g);
-      });
-      treeContainer.appendChild(item);
-
-      for (let subName of g.subgoals) {
-        let subG = Array.from(model.goals.values()).find(x => x.name === subName);
-        if (subG) {
-          renderNode(subG, depth + 1);
-        }
-      }
-    }
-
-    renderNode(rootGoal, 0);
-  }
-
-  // 8. Health Check Badge & List
-  function updateHealthCheck() {
-    const val = model.validate();
-    const badge = document.getElementById("healthBadge");
-    const list = document.getElementById("healthList");
-    if (!badge || !list) return;
-
-    list.innerHTML = "";
-    if (val.isValid && val.issues.length === 0) {
-      badge.className = "health-status-badge ok";
-      badge.innerText = "Hợp lệ (100%)";
-      list.innerHTML = `
-        <div class="health-item ok">✓ Đã thiết lập Root Goal (!${model.initialGoal})</div>
-        <div class="health-item ok">✓ Tất cả Subgoals có Plan tương ứng</div>
-        <div class="health-item ok">✓ Đã cấu hình ${model.recoveryPlans.size} Recovery Plans</div>
-      `;
-    } else {
-      badge.className = "health-status-badge warn";
-      badge.innerText = `${val.issues.length} Cảnh báo`;
-      for (let iss of val.issues) {
-        const item = document.createElement("div");
-        item.className = `health-item ${iss.type}`;
-        item.innerText = (iss.type === "error" ? "✕ " : "⚠ ") + iss.msg;
-        list.appendChild(item);
-      }
-    }
-  }
-
-  // 9. Failure & Recovery Matrix View Table
+  // 7. Failure & Recovery Matrix View Table
   function renderRecoveryMatrix() {
     const tbody = document.getElementById("recoveryMatrixTableBody");
     if (!tbody) return;
@@ -169,7 +92,6 @@ document.addEventListener("DOMContentLoaded", () => {
       let m = model.failureMappings[i];
       const tr = document.createElement("tr");
 
-      // Find matching belief rule body
       let matchingRule = Array.from(model.beliefRules.values()).find(r => r.head === m.beliefCondition);
       let ruleExpr = matchingRule ? `${matchingRule.head} :- ${matchingRule.body}` : m.beliefCondition;
 
@@ -197,130 +119,235 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 10. Node Selection & Property Inspector Binding
+  // 8. Node Selection & Inspector Modal on Node Click
+  const modalGoalInspector = document.getElementById("modalGoalInspector");
+  const modalInspectorTitle = document.getElementById("modalInspectorTitle");
+  const modalGoalName = document.getElementById("modalGoalName");
+  const modalGoalDesc = document.getElementById("modalGoalDesc");
+  const modalGoalDecomp = document.getElementById("modalGoalDecomp");
+  const modalSubgoalsList = document.getElementById("modalSubgoalsList");
+  const btnCloseInspectorModal = document.getElementById("btnCloseInspectorModal");
+  const btnCancelGoalEdit = document.getElementById("btnCancelGoalEdit");
+  const btnSaveGoalEdit = document.getElementById("btnSaveGoalEdit");
+  const btnDeleteSelectedGoal = document.getElementById("btnDeleteSelectedGoal");
+
   canvas.onSelectNode((nodeData) => {
     currentSelectedNode = nodeData;
+    if (!nodeData) return;
 
-    if (!nodeData) {
-      inspectorForm.classList.add("hidden");
-      inspectorEmptyState.classList.remove("hidden");
-      selectedNodeTypeBadge.innerText = "Không chọn";
-      inspectorTitle.innerText = "Chi Tiết Phần Tử";
+    // Open Quick Goal Inspector Modal
+    modalInspectorTitle.innerText = `Chỉnh Sửa Goal: !${nodeData.name}`;
+    modalGoalName.value = nodeData.name;
+    modalGoalDesc.value = nodeData.desc || "";
+    modalGoalDecomp.value = nodeData.decompType || "AND";
+
+    // Render Subgoals chips
+    modalSubgoalsList.innerHTML = "";
+    if (nodeData.subgoals && nodeData.subgoals.length > 0) {
+      for (let subName of nodeData.subgoals) {
+        const chip = document.createElement("span");
+        chip.className = "subgoal-chip";
+        chip.innerHTML = `!${subName} <span class="subgoal-chip-remove" data-sub="${subName}" title="Gỡ liên kết">✕</span>`;
+        modalSubgoalsList.appendChild(chip);
+      }
+
+      modalSubgoalsList.querySelectorAll(".subgoal-chip-remove").forEach(rmBtn => {
+        rmBtn.addEventListener("click", (e) => {
+          let sName = rmBtn.getAttribute("data-sub");
+          nodeData.subgoals = nodeData.subgoals.filter(s => s !== sName);
+          rmBtn.parentElement.remove();
+        });
+      });
+    } else {
+      modalSubgoalsList.innerHTML = "<small style='color:var(--text-muted)'>Chưa có Sub-goal nào được phân rã</small>";
+    }
+
+    modalGoalInspector.classList.add("active");
+  });
+
+  function closeGoalInspector() {
+    modalGoalInspector.classList.remove("active");
+  }
+  btnCloseInspectorModal.addEventListener("click", closeGoalInspector);
+  btnCancelGoalEdit.addEventListener("click", closeGoalInspector);
+
+  btnSaveGoalEdit.addEventListener("click", () => {
+    if (!currentSelectedNode) return;
+
+    let oldName = currentSelectedNode.name;
+    let newName = modalGoalName.value.trim().replace(/[^a-zA-Z0-9_]/g, "");
+    currentSelectedNode.name = newName;
+    currentSelectedNode.desc = modalGoalDesc.value.trim();
+    currentSelectedNode.decompType = modalGoalDecomp.value;
+
+    if (oldName !== newName) {
+      for (let g of model.goals.values()) {
+        g.subgoals = g.subgoals.map(s => s === oldName ? newName : s);
+      }
+      for (let p of model.plans.values()) {
+        if (p.goalName === oldName) p.goalName = newName;
+      }
+      if (model.initialGoal === oldName) {
+        model.initialGoal = newName;
+      }
+    }
+
+    closeGoalInspector();
+    model.computeLayout();
+    model.notify();
+    showToast("Đã lưu thay đổi Goal!", "success");
+  });
+
+  btnDeleteSelectedGoal.addEventListener("click", () => {
+    if (!currentSelectedNode) return;
+    if (confirm(`Bạn có chắc chắn muốn xóa Goal "!${currentSelectedNode.name}" khỏi sơ đồ?`)) {
+      model.deleteNode(currentSelectedNode.id);
+      closeGoalInspector();
+      canvas.deselect();
+      showToast("Đã xóa Goal.", "info");
+    }
+  });
+
+  // 9. FAB (Floating Action Button) Speed Dial & Modals
+  const canvasFabContainer = document.getElementById("canvasFabContainer");
+  const fabMainBtn = document.getElementById("fabMainBtn");
+  const btnFabAddGoal = document.getElementById("btnFabAddGoal");
+  const btnFabAddLink = document.getElementById("btnFabAddLink");
+  const btnFabAddSubgoal = document.getElementById("btnFabAddSubgoal");
+
+  fabMainBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    canvasFabContainer.classList.toggle("active");
+  });
+
+  window.addEventListener("click", (e) => {
+    if (!canvasFabContainer.contains(e.target)) {
+      canvasFabContainer.classList.remove("active");
+    }
+  });
+
+  // Modal 1: Add Goal
+  const modalAddGoal = document.getElementById("modalAddGoal");
+  const btnCloseAddGoalModal = document.getElementById("btnCloseAddGoalModal");
+  const btnCancelAddGoal = document.getElementById("btnCancelAddGoal");
+  const btnConfirmAddGoal = document.getElementById("btnConfirmAddGoal");
+  const newGoalNameInput = document.getElementById("newGoalNameInput");
+  const newGoalDescInput = document.getElementById("newGoalDescInput");
+  const newGoalDecompSelect = document.getElementById("newGoalDecompSelect");
+  const newGoalParentSelect = document.getElementById("newGoalParentSelect");
+
+  btnFabAddGoal.addEventListener("click", () => {
+    canvasFabContainer.classList.remove("active");
+    populateParentDropdown(newGoalParentSelect, null);
+    newGoalNameInput.value = "";
+    newGoalDescInput.value = "";
+    modalAddGoal.classList.add("active");
+  });
+
+  function closeAddGoalModal() {
+    modalAddGoal.classList.remove("active");
+  }
+  btnCloseAddGoalModal.addEventListener("click", closeAddGoalModal);
+  btnCancelAddGoal.addEventListener("click", closeAddGoalModal);
+
+  btnConfirmAddGoal.addEventListener("click", () => {
+    let name = newGoalNameInput.value.trim().replace(/[^a-zA-Z0-9_]/g, "");
+    if (!name) {
+      alert("Vui lòng nhập tên Goal!");
       return;
     }
 
-    inspectorEmptyState.classList.add("hidden");
-    inspectorForm.classList.remove("hidden");
+    let desc = newGoalDescInput.value.trim();
+    let decomp = newGoalDecompSelect.value;
+    let parent = newGoalParentSelect.value || null;
 
-    // Toggle form field visibility based on node type
-    document.querySelectorAll(".goal-only, .plan-only, .recovery-only, .belief-rule-only").forEach(el => {
-      el.classList.add("hidden");
-    });
-
-    if (nodeData.type === "goal") {
-      selectedNodeTypeBadge.innerText = "Goal Node";
-      selectedNodeTypeBadge.style.color = "var(--accent-cyan)";
-      inspectorTitle.innerText = `Goal: !${nodeData.name}`;
-      document.querySelectorAll(".goal-only").forEach(el => el.classList.remove("hidden"));
-
-      propGoalName.value = nodeData.name;
-      propGoalDesc.value = nodeData.desc || "";
-      propDecompType.value = nodeData.decompType || "AND";
-    } else if (nodeData.type === "plan") {
-      selectedNodeTypeBadge.innerText = "Plan Node";
-      selectedNodeTypeBadge.style.color = "var(--accent-emerald)";
-      inspectorTitle.innerText = `Plan: +!${nodeData.goalName}`;
-      document.querySelectorAll(".plan-only").forEach(el => el.classList.remove("hidden"));
-
-      propPlanTrigger.value = nodeData.goalName;
-      propPlanContext.value = nodeData.context || "";
-      propPlanBody.value = nodeData.bodyText || (nodeData.actions ? nodeData.actions.join(";\n") : "");
-    } else if (nodeData.type === "recovery") {
-      selectedNodeTypeBadge.innerText = "Recovery Plan";
-      selectedNodeTypeBadge.style.color = "var(--accent-rose)";
-      inspectorTitle.innerText = `Recovery: +!${nodeData.goalName}`;
-      document.querySelectorAll(".recovery-only").forEach(el => el.classList.remove("hidden"));
-
-      let mapping = model.failureMappings.find(m => m.recoveryPlan === nodeData.goalName);
-      propPlanTrigger.value = nodeData.goalName;
-      propRecoveryTargetGoal.value = mapping ? mapping.targetGoal : model.initialGoal;
-      propRecoveryErrorName.value = mapping ? mapping.errorName : nodeData.goalName + "_err";
-      propRecoveryConditions.value = mapping ? mapping.beliefCondition : "failure_condition";
-      propPlanBody.value = nodeData.bodyText || "";
-    } else if (nodeData.head !== undefined) {
-      // Belief Rule
-      selectedNodeTypeBadge.innerText = "Belief Rule";
-      selectedNodeTypeBadge.style.color = "var(--accent-purple)";
-      inspectorTitle.innerText = `Rule: ${nodeData.head}`;
-      document.querySelectorAll(".belief-rule-only").forEach(el => el.classList.remove("hidden"));
-
-      propBeliefHead.value = nodeData.head;
-      propBeliefBody.value = nodeData.body || "";
-    }
+    model.addGoal(name, desc, decomp, parent);
+    closeAddGoalModal();
+    canvas.zoomFit();
+    showToast(`Đã thêm Goal "!${name}" thành công!`, "success");
   });
 
-  // Apply Changes from Inspector Form
-  document.getElementById("btnApplyProperties").addEventListener("click", () => {
-    if (!currentSelectedNode) return;
+  // Modal 2: Add Link / Decomposition
+  const modalAddLink = document.getElementById("modalAddLink");
+  const btnCloseAddLinkModal = document.getElementById("btnCloseAddLinkModal");
+  const btnCancelAddLink = document.getElementById("btnCancelAddLink");
+  const btnConfirmAddLink = document.getElementById("btnConfirmAddLink");
+  const linkParentSelect = document.getElementById("linkParentSelect");
+  const linkChildSelect = document.getElementById("linkChildSelect");
+  const linkDecompTypeSelect = document.getElementById("linkDecompTypeSelect");
 
-    if (currentSelectedNode.type === "goal") {
-      let oldName = currentSelectedNode.name;
-      let newName = propGoalName.value.trim().replace(/[^a-zA-Z0-9_]/g, "");
-      currentSelectedNode.name = newName;
-      currentSelectedNode.desc = propGoalDesc.value.trim();
-      currentSelectedNode.decompType = propDecompType.value;
+  btnFabAddLink.addEventListener("click", () => {
+    canvasFabContainer.classList.remove("active");
+    populateGoalDropdown(linkParentSelect, currentSelectedNode ? currentSelectedNode.name : null);
+    populateGoalDropdown(linkChildSelect, null);
+    modalAddLink.classList.add("active");
+  });
 
-      if (oldName !== newName) {
-        // Update references in plans and other goals
-        for (let g of model.goals.values()) {
-          g.subgoals = g.subgoals.map(s => s === oldName ? newName : s);
-        }
-        for (let p of model.plans.values()) {
-          if (p.goalName === oldName) p.goalName = newName;
-        }
-        if (model.initialGoal === oldName) {
-          model.initialGoal = newName;
-        }
+  btnFabAddSubgoal.addEventListener("click", () => {
+    canvasFabContainer.classList.remove("active");
+    populateParentDropdown(newGoalParentSelect, currentSelectedNode ? currentSelectedNode.name : null);
+    newGoalNameInput.value = "";
+    newGoalDescInput.value = "";
+    modalAddGoal.classList.add("active");
+  });
+
+  function closeAddLinkModal() {
+    modalAddLink.classList.remove("active");
+  }
+  btnCloseAddLinkModal.addEventListener("click", closeAddLinkModal);
+  btnCancelAddLink.addEventListener("click", closeAddLinkModal);
+
+  btnConfirmAddLink.addEventListener("click", () => {
+    let parentName = linkParentSelect.value;
+    let childName = linkChildSelect.value;
+    let decompType = linkDecompTypeSelect.value;
+
+    if (!parentName || !childName) {
+      alert("Vui lòng chọn đầy đủ Goal Cha và Goal Con!");
+      return;
+    }
+    if (parentName === childName) {
+      alert("Goal Cha và Goal Con không được trùng nhau!");
+      return;
+    }
+
+    let parentGoal = Array.from(model.goals.values()).find(g => g.name === parentName);
+    if (parentGoal) {
+      parentGoal.decompType = decompType;
+      if (!parentGoal.subgoals.includes(childName)) {
+        parentGoal.subgoals.push(childName);
       }
-    } else if (currentSelectedNode.type === "plan") {
-      currentSelectedNode.goalName = propPlanTrigger.value.trim();
-      currentSelectedNode.context = propPlanContext.value.trim();
-      currentSelectedNode.bodyText = propPlanBody.value.trim();
-      currentSelectedNode.actions = propPlanBody.value.split(";").map(s => s.trim()).filter(Boolean);
-    } else if (currentSelectedNode.type === "recovery") {
-      currentSelectedNode.goalName = propPlanTrigger.value.trim();
-      currentSelectedNode.bodyText = propPlanBody.value.trim();
-      currentSelectedNode.actions = propPlanBody.value.split(";").map(s => s.trim()).filter(Boolean);
-
-      // Update mapping
-      let mapping = model.failureMappings.find(m => m.recoveryPlan === currentSelectedNode.goalName);
-      if (mapping) {
-        mapping.targetGoal = propRecoveryTargetGoal.value.trim();
-        mapping.errorName = propRecoveryErrorName.value.trim();
-        mapping.beliefCondition = propRecoveryConditions.value.trim();
-      }
-    } else if (currentSelectedNode.head !== undefined) {
-      currentSelectedNode.head = propBeliefHead.value.trim();
-      currentSelectedNode.body = propBeliefBody.value.trim();
-      currentSelectedNode.conditions = propBeliefBody.value.split("&").map(s => s.trim());
-    }
-
-    model.computeLayout();
-    model.notify();
-    showToast("Đã cập nhật phần tử thành công!", "success");
-  });
-
-  // Delete Node
-  document.getElementById("btnDeleteNode").addEventListener("click", () => {
-    if (!currentSelectedNode) return;
-    if (confirm(`Bạn có chắc chắn muốn xóa phần tử này khỏi Goal Model?`)) {
-      model.deleteNode(currentSelectedNode.id);
-      canvas.deselect();
-      showToast("Đã xóa phần tử.", "info");
+      model.computeLayout();
+      model.notify();
+      closeAddLinkModal();
+      canvas.zoomFit();
+      showToast(`Đã tạo liên kết: !${parentName} ➔ !${childName} [${decompType}]`, "success");
     }
   });
 
-  // 11. View Mode Tab Switching
+  function populateParentDropdown(selectEl, selectedName) {
+    selectEl.innerHTML = '<option value="">-- Không có (Mục tiêu độc lập) --</option>';
+    for (let g of model.goals.values()) {
+      let opt = document.createElement("option");
+      opt.value = g.name;
+      opt.textContent = `!${g.name} (${g.desc || "Goal"})`;
+      if (selectedName && g.name === selectedName) opt.selected = true;
+      selectEl.appendChild(opt);
+    }
+  }
+
+  function populateGoalDropdown(selectEl, selectedName) {
+    selectEl.innerHTML = "";
+    for (let g of model.goals.values()) {
+      let opt = document.createElement("option");
+      opt.value = g.name;
+      opt.textContent = `!${g.name} (${g.desc || "Goal"})`;
+      if (selectedName && g.name === selectedName) opt.selected = true;
+      selectEl.appendChild(opt);
+    }
+  }
+
+  // 10. View Mode Tab Switching
   const tabs = document.querySelectorAll(".view-tab");
   const viewContainers = document.querySelectorAll(".view-container");
   const canvasToolbar = document.getElementById("canvasToolbar");
@@ -350,7 +377,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 12. Dropdown Menus Toggling
+  // 11. Dropdown Menus Toggling
   document.querySelectorAll(".dropdown-toggle").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -360,10 +387,6 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       parent.classList.toggle("active");
     });
-  });
-
-  window.addEventListener("click", () => {
-    document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("active"));
   });
 
   // Sample Selection
@@ -377,7 +400,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 13. Canvas Zoom & Layout Controls
+  // 12. Canvas Zoom & Layout Controls
   document.getElementById("btnZoomIn").addEventListener("click", () => canvas.zoomIn());
   document.getElementById("btnZoomOut").addEventListener("click", () => canvas.zoomOut());
   document.getElementById("btnZoomFit").addEventListener("click", () => canvas.zoomFit());
@@ -388,7 +411,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast("Đã tự động sắp xếp lại cây mục tiêu Goal!", "success");
   });
 
-  // 14. Dual File Import Modal Handling
+  // 13. Dual File Import Modal Handling
   const importModal = document.getElementById("importModal");
   const btnOpenImport = document.getElementById("btnOpenImport");
   const btnCloseImportModal = document.getElementById("btnCloseImportModal");
@@ -412,14 +435,12 @@ document.addEventListener("DOMContentLoaded", () => {
   btnCloseImportModal.addEventListener("click", closeImport);
   btnCancelImport.addEventListener("click", closeImport);
 
-  // Drag and Drop for Agent File
   setupDropzone(dropzoneAgent, fileInputAgent, (content, name) => {
     importedAgentText = content;
     agentDropStatus.innerText = `✓ Đã chọn: ${name}`;
     dropzoneAgent.classList.add("has-file");
   });
 
-  // Drag and Drop for Belief File
   setupDropzone(dropzoneBelief, fileInputBelief, (content, name) => {
     importedBeliefText = content;
     beliefDropStatus.innerText = `✓ Đã chọn: ${name}`;
@@ -458,7 +479,6 @@ document.addEventListener("DOMContentLoaded", () => {
     reader.readAsText(file);
   }
 
-  // Confirm Import
   btnConfirmImport.addEventListener("click", () => {
     let agentCode = importedAgentText || document.getElementById("pasteAgentText").value;
     let beliefCode = importedBeliefText || document.getElementById("pasteBeliefText").value;
@@ -481,7 +501,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast("Import và khởi tạo Goal Model thành công!", "success");
   });
 
-  // 15. Dual Code Sync Buttons
+  // 14. Dual Code Sync Buttons
   document.getElementById("btnSyncFromAgentCode").addEventListener("click", () => {
     const rawCode = agentAslCodeArea.value;
     const ast = AslParser.parseAgentAsl(rawCode);
@@ -517,7 +537,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast("Đã sao chép khối cấu hình Failure Model .jcm!", "info");
   });
 
-  // 16. Export Actions
+  // 15. Export Actions
   document.getElementById("btnExportAgentAsl").addEventListener("click", () => {
     const content = AslParser.generateAgentAsl(
       model.agentName,
@@ -536,7 +556,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("btnExportBothZip").addEventListener("click", () => {
-    // Download both files consecutively
     document.getElementById("btnExportAgentAsl").click();
     setTimeout(() => {
       document.getElementById("btnExportBeliefAsl").click();
@@ -582,7 +601,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast(`Đã xuất file: ${filename}`, "success");
   }
 
-  // 17. Simulator Buttons Binding
+  // 16. Simulator Buttons Binding
   document.getElementById("btnSimStep").addEventListener("click", () => simulator.step());
   document.getElementById("btnSimReset").addEventListener("click", () => simulator.reset());
   document.getElementById("btnSimAutoPlay").addEventListener("click", () => simulator.toggleAutoPlay());
@@ -590,7 +609,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("simConsole").innerHTML = "";
   });
 
-  // 18. Toast Notification Utility
+  // 17. Toast Notification Utility
   function showToast(message, type = "info") {
     const container = document.getElementById("toastContainer");
     if (!container) return;

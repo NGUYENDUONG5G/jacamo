@@ -746,10 +746,10 @@ body, html {
 /* Mini Map */
 .minimap-container {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
-  width: 170px;
-  height: 110px;
+  bottom: 24px;
+  left: 24px;
+  width: 160px;
+  height: 100px;
   background: rgba(10, 14, 23, 0.85);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -767,6 +767,142 @@ body, html {
   border: 1px solid var(--accent-cyan);
   background: rgba(0, 242, 254, 0.1);
   pointer-events: none;
+}
+
+/* Full Width Canvas Body */
+.full-width-body {
+  width: 100%;
+}
+.full-width-body .center-content {
+  width: 100%;
+}
+
+/* Floating Action Button (FAB) Speed Dial */
+.canvas-fab-container {
+  position: absolute;
+  bottom: 28px;
+  right: 28px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 12px;
+  z-index: 100;
+}
+
+.fab-main-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00f2fe, #2563eb);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 20px rgba(0, 242, 254, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.fab-main-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 25px rgba(0, 242, 254, 0.65);
+}
+
+.canvas-fab-container.active .fab-main-btn {
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #f43f5e, #e11d48);
+  box-shadow: 0 4px 20px rgba(244, 63, 94, 0.5);
+}
+
+.fab-icon {
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  user-select: none;
+  transition: var(--transition-fast);
+}
+
+.fab-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(15px) scale(0.9);
+  pointer-events: none;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.canvas-fab-container.active .fab-menu {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.fab-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  font-family: var(--font-main);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: var(--transition-fast);
+  backdrop-filter: blur(12px);
+  white-space: nowrap;
+}
+
+.fab-item:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-cyan);
+  transform: translateX(-4px);
+  box-shadow: 0 4px 15px rgba(0, 242, 254, 0.25);
+}
+
+.fab-item-icon {
+  font-size: 15px;
+}
+
+.modal-dialog-sm {
+  width: 480px;
+  max-width: 90vw;
+}
+
+.subgoals-chip-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.subgoal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(0, 242, 254, 0.12);
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-family: var(--font-code);
+  color: var(--accent-cyan);
+}
+
+.subgoal-chip-remove {
+  cursor: pointer;
+  opacity: 0.7;
+  font-weight: bold;
+}
+.subgoal-chip-remove:hover {
+  opacity: 1;
+  color: var(--accent-rose);
 }
 
 /* Tab 2: Dual Code Editor */
