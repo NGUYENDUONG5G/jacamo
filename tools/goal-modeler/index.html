@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JaCaMo Goal Modeler - Visual ASL & Belief Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+  <div id="app" class="app-container">
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <div class="brand-section">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9" stroke="url(#cyan-grad)"/>
+            <circle cx="12" cy="12" r="4" fill="url(#cyan-grad)" opacity="0.6"/>
+            <path d="M12 3v4M12 17v4M3 12h4M17 12h4" stroke="currentColor" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="cyan-grad" x1="0" y1="0" x2="24" y2="24">
+                <stop offset="0%" stop-color="#00f2fe"/>
+                <stop offset="100%" stop-color="#4facfe"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">JaCaMo <span class="highlight">Goal Studio</span></span>
+          <span class="brand-badge">AgentSpeak & Belief Modeler</span>
+        </div>
+      </div>
+
+      <div class="project-info">
+        <div class="agent-name-box">
+          <span class="label">Agent:</span>
+          <input type="text" id="agentNameInput" class="agent-name-input" value="delivery_truck" title="Agent Functor Name" />
+        </div>
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span id="modelStats">Goals: 5 | Plans: 11 | Belief Rules: 8</span>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <!-- Sample Presets Dropdown -->
+        <div class="dropdown">
+          <button id="btnSampleSelect" class="btn btn-secondary dropdown-toggle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            Mẫu có sẵn
+          </button>
+          <div class="dropdown-menu" id="sampleDropdownMenu">
+            <a href="#" class="dropdown-item active" data-sample="delivery_truck">🚚 Delivery Truck MAS (Default)</a>
+            <a href="#" class="dropdown-item" data-sample="warehouse_picker">📦 Warehouse AMR Picker</a>
+            <a href="#" class="dropdown-item" data-sample="drone_patrol">🚁 Drone Surveillance & Rescue</a>
+            <div class="dropdown-divider"></div>
+            <a href="#" class="dropdown-item" data-sample="empty_template">✨ Template mới (Trống)</a>
+          </div>
+        </div>
+
+        <!-- Import Button -->
+        <button id="btnOpenImport" class="btn btn-secondary" title="Import 2 file .asl (Agent + Belief)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Import 2 file .asl
+        </button>
+
+        <!-- Export Dropdown -->
+        <div class="dropdown">
+          <button id="btnExportMenu" class="btn btn-primary dropdown-toggle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Export / Xuất mã
+          </button>
+          <div class="dropdown-menu dropdown-menu-right" id="exportDropdownMenu">
+            <a href="#" class="dropdown-item" id="btnExportAgentAsl">📄 Tải Agent ASL (<span id="agentFileNameLabel">delivery_truck.asl</span>)</a>
+            <a href="#" class="dropdown-item" id="btnExportBeliefAsl">🧠 Tải Belief ASL (belief.asl)</a>
+            <a href="#" class="dropdown-item" id="btnExportBothZip">📦 Tải gói 2 file ASL (.zip)</a>
+            <div class="dropdown-divider"></div>
+            <a href="#" class="dropdown-item" id="btnExportJcmConfig">⚙️ Xuất JaCaMo Failure Model (.jcm)</a>
+            <a href="#" class="dropdown-item" id="btnExportJson">💾 Lưu Goal Model (.json)</a>
+            <a href="#" class="dropdown-item" id="btnExportSvg">🖼️ Xuất sơ đồ Vector (.svg)</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Area -->
+    <div class="main-body">
+      <!-- Left Sidebar: Palette & Node Library -->
+      <aside class="sidebar left-sidebar" id="leftSidebar">
+        <div class="sidebar-header">
+          <h3>Palette Thiết Kế</h3>
+          <span class="badge-hint">Kéo / Click để thêm</span>
+        </div>
+
+        <div class="palette-group">
+          <div class="palette-title">Goal Model Elements</div>
+          
+          <div class="palette-item" draggable="true" data-type="goal" title="Thêm Goal mới (Mục tiêu gốc hoặc Subgoal)">
+            <div class="palette-icon icon-goal">🎯</div>
+            <div class="palette-info">
+              <span class="palette-name">Goal (!goal)</span>
+              <span class="palette-desc">Mục tiêu cần đạt</span>
+            </div>
+          </div>
+
+          <div class="palette-item" draggable="true" data-type="plan" title="Thêm Plan (Kế hoạch thực thi với Pre-condition)">
+            <div class="palette-icon icon-plan">📋</div>
+            <div class="palette-info">
+              <span class="palette-name">Plan (+!goal : ctx)</span>
+              <span class="palette-desc">Kế hoạch có điều kiện</span>
+            </div>
+          </div>
+
+          <div class="palette-item" draggable="true" data-type="recovery" title="Thêm Recovery Plan (Xử lý sự cố / Thích ứng)">
+            <div class="palette-icon icon-recovery">⚡</div>
+            <div class="palette-info">
+              <span class="palette-name">Recovery Plan</span>
+              <span class="palette-desc">Xử lý lỗi Failure Model</span>
+            </div>
+          </div>
+
+          <div class="palette-item" draggable="true" data-type="belief_rule" title="Thêm Belief Rule (Luật suy diễn niềm tin)">
+            <div class="palette-icon icon-belief">🧠</div>
+            <div class="palette-info">
+              <span class="palette-name">Belief Rule (:- )</span>
+              <span class="palette-desc">Luật suy diễn belief.asl</span>
+            </div>
+          </div>
+
+          <div class="palette-item" draggable="true" data-type="belief_fact" title="Thêm Belief ban đầu (Facts)">
+            <div class="palette-icon icon-fact">💡</div>
+            <div class="palette-info">
+              <span class="palette-name">Initial Belief</span>
+              <span class="palette-desc">Niềm tin khởi tạo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Tree Hierarchy Outline -->
+        <div class="sidebar-section-divider"></div>
+        <div class="sidebar-header">
+          <h3>Cây Phân Rã Goal</h3>
+          <button class="btn-icon" id="btnCollapseTree" title="Thu gọn / Mở rộng">↕</button>
+        </div>
+        <div class="goal-tree-explorer" id="goalTreeExplorer">
+          <!-- Dynamic Tree Rendered Here -->
+        </div>
+
+        <!-- Quick Stats & Health Check -->
+        <div class="health-card" id="healthCard">
+          <div class="health-header">
+            <span class="health-title">Kiểm tra hợp lệ</span>
+            <span class="health-status-badge ok" id="healthBadge">Hợp lệ</span>
+          </div>
+          <div class="health-list" id="healthList">
+            <div class="health-item ok">✓ Đã cấu hình Root Goal</div>
+            <div class="health-item ok">✓ 100% Subgoals có Plan</div>
+            <div class="health-item ok">✓ Đầy đủ Recovery Plans</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Main Content Tabs -->
+      <main class="center-content">
+        <!-- View Mode Navigation Tabs -->
+        <div class="content-tab-bar">
+          <div class="tabs-left">
+            <button class="view-tab active" data-view="canvas">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Sơ đồ Goal Canvas
+            </button>
+            <button class="view-tab" data-view="code">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Dual Code Editor (Agent & Belief ASL)
+            </button>
+            <button class="view-tab" data-view="recovery_matrix">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Failure & Recovery Matrix
+            </button>
+            <button class="view-tab" data-view="simulator">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Goal Execution Simulator
+            </button>
+          </div>
+
+          <!-- Canvas Sub-Controls -->
+          <div class="tabs-right" id="canvasToolbar">
+            <div class="canvas-zoom-controls">
+              <button class="btn-icon" id="btnZoomOut" title="Thu nhỏ (Ctrl -)">−</button>
+              <span id="zoomLevelDisplay">100%</span>
+              <button class="btn-icon" id="btnZoomIn" title="Phóng to (Ctrl +)">+</button>
+              <button class="btn-icon" id="btnZoomFit" title="Vừa màn hình">⛶</button>
+              <button class="btn-icon" id="btnAutoLayout" title="Tự động căn chỉnh cây mục tiêu (Auto Layout)">🪄 Sắp xếp cây</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 1: Visual Canvas View -->
+        <div class="view-container active" id="canvasView">
+          <div class="canvas-wrapper" id="canvasWrapper">
+            <svg id="goalCanvas" class="goal-canvas">
+              <defs>
+                <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255, 255, 255, 0.04)" stroke-width="1"/>
+                  <circle cx="40" cy="40" r="1.5" fill="rgba(255, 255, 255, 0.08)"/>
+                </pattern>
+                <!-- Arrow Markers -->
+                <marker id="arrowAnd" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#00f2fe"/>
+                </marker>
+                <marker id="arrowOr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981"/>
+                </marker>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#gridPattern)" />
+              <g id="canvasTransformGroup">
+                <!-- Dynamic Links / Connectors Layer -->
+                <g id="linksLayer"></g>
+                <!-- Dynamic Nodes Layer -->
+                <g id="nodesLayer"></g>
+              </g>
+            </svg>
+
+            <!-- Floating Canvas Legend -->
+            <div class="canvas-legend">
+              <div class="legend-item"><span class="legend-bullet goal"></span> Goal (!g)</div>
+              <div class="legend-item">👑 Root Goal</div>
+              <div class="legend-item"><span class="legend-line and"></span> AND-Decomp</div>
+              <div class="legend-item"><span class="legend-line or"></span> OR-Decomp</div>
+            </div>
+
+            <!-- Mini Map -->
+            <div class="minimap-container" id="minimapContainer">
+              <svg id="minimapSvg"></svg>
+              <div class="minimap-viewport" id="minimapViewport"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Dual Code Editor View -->
+        <div class="view-container" id="codeView">
+          <div class="dual-editor-container">
+            <!-- Left Pane: Agent ASL -->
+            <div class="editor-pane">
+              <div class="editor-pane-header">
+                <div class="pane-title">
+                  <span class="file-icon">📄</span>
+                  <span class="file-name" id="agentEditorFileName">delivery_truck.asl</span>
+                  <span class="file-tag">Agent Plans & Goals</span>
+                </div>
+                <div class="pane-actions">
+                  <button class="btn btn-sm btn-secondary" id="btnSyncFromAgentCode" title="Cập nhật sơ đồ từ mã ASL này">
+                    🔄 Cập nhật sơ đồ
+                  </button>
+                  <button class="btn btn-sm btn-icon" id="btnCopyAgentCode" title="Sao chép">📋</button>
+                </div>
+              </div>
+              <div class="editor-content-wrapper">
+                <textarea id="agentAslCodeArea" class="code-textarea" spellcheck="false"></textarea>
+              </div>
+            </div>
+
+            <!-- Right Pane: Beliefs ASL -->
+            <div class="editor-pane">
+              <div class="editor-pane-header">
+                <div class="pane-title">
+                  <span class="file-icon">🧠</span>
+                  <span class="file-name">belief.asl</span>
+                  <span class="file-tag">Belief Deduction Rules</span>
+                </div>
+                <div class="pane-actions">
+                  <button class="btn btn-sm btn-secondary" id="btnSyncFromBeliefCode" title="Cập nhật luật suy diễn vào sơ đồ">
+                    🔄 Cập nhật sơ đồ
+                  </button>
+                  <button class="btn btn-sm btn-icon" id="btnCopyBeliefCode" title="Sao chép">📋</button>
+                </div>
+              </div>
+              <div class="editor-content-wrapper">
+                <textarea id="beliefAslCodeArea" class="code-textarea" spellcheck="false"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Failure & Recovery Matrix -->
+        <div class="view-container" id="recoveryMatrixView">
+          <div class="matrix-container">
+            <div class="matrix-header">
+              <div>
+                <h2>Bảng Ánh Xạ Xử Lý Lỗi (Failure & Recovery Matrix)</h2>
+                <p class="matrix-subtitle">Mô hình hóa cơ chế Tropos4AS: Goal ➔ Failure Condition (Belief) ➔ Error ➔ Recovery Adaptation</p>
+              </div>
+              <button class="btn btn-primary" id="btnAddMatrixRow">+ Thêm Ánh Xạ Lỗi Mới</button>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table" id="recoveryMatrixTable">
+                <thead>
+                  <tr>
+                    <th>Mục Tiêu Giám Sát (Goal)</th>
+                    <th>Tên Lỗi (Error)</th>
+                    <th>Điều Kiện Kích Hoạt (Belief Condition)</th>
+                    <th>Luật Suy Diễn Liên Quan (belief.asl)</th>
+                    <th>Kế Hoạch Khôi Phục (Recovery Plan)</th>
+                    <th>Loại Thích Ứng</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="recoveryMatrixTableBody">
+                  <!-- Generated Dynamically -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- JCM Configuration Preview -->
+            <div class="jcm-preview-card">
+              <div class="jcm-header">
+                <div class="pane-title">
+                  <span>⚙️</span>
+                  <span>Cấu hình tự động tương ứng trong .jcm (JaCaMo Failure Model Block)</span>
+                </div>
+                <button class="btn btn-sm btn-secondary" id="btnCopyJcm">Sao chép JCM</button>
+              </div>
+              <pre class="code-preview" id="jcmConfigPreview"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Execution & Recovery Simulator -->
+        <div class="view-container" id="simulatorView">
+          <div class="simulator-container">
+            <!-- Sim Controls Header -->
+            <div class="sim-header">
+              <div class="sim-brand">
+                <span class="sim-icon">🎮</span>
+                <div>
+                  <h2 class="sim-title">Mô Phỏng Thực Thi Goal & Tự Phục Hồi Lỗi</h2>
+                  <p class="sim-desc">Test luồng thực thi các Goal, chuyển nhánh Plan theo điều kiện Context, kích hoạt lỗi và chạy Recovery Plan trực quan.</p>
+                </div>
+              </div>
+
+              <div class="sim-actions">
+                <button class="btn btn-secondary" id="btnSimReset">🔄 Đặt lại</button>
+                <button class="btn btn-primary" id="btnSimStep">▶ Bước tiếp theo (Step)</button>
+                <button class="btn btn-success" id="btnSimAutoPlay">⚡ Chạy tự động (Auto)</button>
+              </div>
+            </div>
+
+            <!-- Simulator Split Panels -->
+            <div class="sim-grid">
+              <!-- Left: Belief Base Toggle Panel -->
+              <div class="sim-panel">
+                <div class="sim-panel-title">
+                  <span>🧠 Belief Base & Trạng Thái Môi Trường</span>
+                  <span class="badge-hint">Click để bật/tắt</span>
+                </div>
+                <div class="sim-beliefs-list" id="simBeliefsList">
+                  <!-- Dynamic Belief Toggles -->
+                </div>
+                
+                <div class="sim-panel-title mt-4">
+                  <span>📊 Biến Context Hiện Tại</span>
+                </div>
+                <div class="sim-params-list" id="simParamsList">
+                  <!-- Dynamic Param Sliders / Radios -->
+                </div>
+              </div>
+
+              <!-- Center: Goal Execution Flow Tree -->
+              <div class="sim-panel flex-2">
+                <div class="sim-panel-title">
+                  <span>🎯 Tiến Trình Thực Thi Mục Tiêu (Goal Stack & Plan Tree)</span>
+                  <span id="simStepCounter" class="sim-step-badge">Bước: 0</span>
+                </div>
+                <div class="sim-timeline" id="simTimeline">
+                  <!-- Dynamic timeline/tree nodes during simulation -->
+                </div>
+              </div>
+
+              <!-- Right: Reasoning Cycle Output Log -->
+              <div class="sim-panel">
+                <div class="sim-panel-title">
+                  <span>📟 Nhật Ký Lý Trí (Reasoning Cycle Log)</span>
+                  <button class="btn-icon btn-sm" id="btnClearSimLog" title="Xóa log">🗑️</button>
+                </div>
+                <div class="sim-console" id="simConsole">
+                  <div class="console-line info">[Sim] Sẵn sàng mô phỏng. Bấm "Bước tiếp theo" để bắt đầu Root Goal.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Sidebar: Inspector / Property Editor -->
+      <aside class="sidebar right-sidebar" id="rightSidebar">
+        <div class="sidebar-header">
+          <h3 id="inspectorTitle">Chi Tiết Phần Tử</h3>
+          <span class="element-badge" id="selectedNodeTypeBadge">Không chọn</span>
+        </div>
+
+        <div id="inspectorEmptyState" class="empty-inspector">
+          <div class="empty-icon">🖱️</div>
+          <p>Chọn một Goal, Plan, Recovery Plan hoặc Belief Rule trên sơ đồ để chỉnh sửa thuộc tính.</p>
+        </div>
+
+        <form id="inspectorForm" class="inspector-form hidden">
+          <!-- Goal Properties -->
+          <div class="form-group goal-only">
+            <label for="propGoalName">Tên Goal (Functor)</label>
+            <div class="input-with-prefix">
+              <span class="prefix">!</span>
+              <input type="text" id="propGoalName" class="form-control" placeholder="deliver_success" />
+            </div>
+          </div>
+
+          <div class="form-group goal-only">
+            <label for="propGoalDesc">Mô tả / Nhãn hiển thị</label>
+            <input type="text" id="propGoalDesc" class="form-control" placeholder="Bắt đầu quy trình giao hàng" />
+          </div>
+
+          <div class="form-group goal-only">
+            <label for="propDecompType">Kiểu phân rã Sub-goals</label>
+            <select id="propDecompType" class="form-control">
+              <option value="AND">AND-Decomposition (Tất cả tuần tự)</option>
+              <option value="OR">OR-Decomposition (Lựa chọn nhánh)</option>
+            </select>
+          </div>
+
+          <!-- Plan Properties -->
+          <div class="form-group plan-only">
+            <label for="propPlanTrigger">Kích hoạt (Trigger Goal)</label>
+            <div class="input-with-prefix">
+              <span class="prefix">+!</span>
+              <input type="text" id="propPlanTrigger" class="form-control" placeholder="load_and_verify_package" />
+            </div>
+          </div>
+
+          <div class="form-group plan-only">
+            <label for="propPlanContext">Điều kiện ngữ cảnh (Context Guard : )</label>
+            <input type="text" id="propPlanContext" class="form-control" placeholder="pickup_method(robot_arm)" />
+            <span class="field-hint">Điều kiện ràng buộc niềm tin trước khi chọn kế hoạch</span>
+          </div>
+
+          <div class="form-group plan-only recovery-only">
+            <label for="propPlanBody">Nội dung thực thi (Body Actions &lt;- )</label>
+            <textarea id="propPlanBody" class="form-control code-font" rows="5" placeholder=".print(&quot;Executing...&quot;);&#10;!subgoal_name;&#10;+belief_updated."></textarea>
+            <span class="field-hint">Mỗi hành động cách nhau bởi dấu chấm phẩy (;)</span>
+          </div>
+
+          <!-- Recovery Plan Properties -->
+          <div class="form-group recovery-only">
+            <label for="propRecoveryTargetGoal">Mục tiêu mục tiêu gặp lỗi (Target Goal)</label>
+            <input type="text" id="propRecoveryTargetGoal" class="form-control" placeholder="pickup_package" />
+          </div>
+
+          <div class="form-group recovery-only">
+            <label for="propRecoveryErrorName">Tên lỗi (Error Name)</label>
+            <input type="text" id="propRecoveryErrorName" class="form-control" placeholder="arm_disconnected_error" />
+          </div>
+
+          <div class="form-group recovery-only">
+            <label for="propRecoveryConditions">Điều kiện kích hoạt lỗi (Monitored Belief)</label>
+            <input type="text" id="propRecoveryConditions" class="form-control" placeholder="arm_disconnected" />
+          </div>
+
+          <!-- Belief Rule Properties -->
+          <div class="form-group belief-rule-only">
+            <label for="propBeliefHead">Đầu luật suy diễn (Head Predicate)</label>
+            <input type="text" id="propBeliefHead" class="form-control" placeholder="path_blocked" />
+          </div>
+
+          <div class="form-group belief-rule-only">
+            <label for="propBeliefBody">Thân điều kiện (Body Expression :- )</label>
+            <input type="text" id="propBeliefBody" class="form-control" placeholder="road_blocked_detected & not reroute_done" />
+            <span class="field-hint">Các vị từ logic kết hợp bởi &amp;, |, not</span>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="inspector-actions">
+            <button type="button" class="btn btn-primary btn-block" id="btnApplyProperties">
+              ✓ Lưu & Cập Nhật Sơ Đồ
+            </button>
+            <button type="button" class="btn btn-danger btn-block" id="btnDeleteNode">
+              🗑️ Xóa Phần Tử
+            </button>
+          </div>
+        </form>
+      </aside>
+    </div>
+
+    <!-- Import Modal (Dual ASL Files) -->
+    <div class="modal-backdrop" id="importModal">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span class="modal-icon">📥</span>
+            <h3>Import Goal Model từ 2 File .ASL</h3>
+          </div>
+          <button class="btn-icon" id="btnCloseImportModal">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <p class="modal-desc">
+            Chọn hoặc kéo thả 2 file AgentSpeak: file chính chứa các Goal & Kế hoạch (ví dụ <code>delivery_truck.asl</code>) và file chứa các Luật suy diễn niềm tin (ví dụ <code>belief.asl</code>).
+          </p>
+
+          <div class="dropzones-container">
+            <!-- Dropzone 1: Agent ASL -->
+            <div class="dropzone" id="dropzoneAgent">
+              <input type="file" id="fileInputAgent" accept=".asl,.txt" class="file-input-hidden" />
+              <div class="dropzone-icon">📄</div>
+              <h4>1. File Agent ASL (*.asl)</h4>
+              <p class="dropzone-sub">Chứa Goals, Plans <code>+!goal</code>, Recovery Plans</p>
+              <div class="dropzone-status" id="agentDropStatus">Chưa chọn file (Kéo thả hoặc click)</div>
+            </div>
+
+            <!-- Dropzone 2: Belief ASL -->
+            <div class="dropzone" id="dropzoneBelief">
+              <input type="file" id="fileInputBelief" accept=".asl,.txt" class="file-input-hidden" />
+              <div class="dropzone-icon">🧠</div>
+              <h4>2. File Belief ASL (belief.asl)</h4>
+              <p class="dropzone-sub">Chứa các luật suy diễn <code>head :- body.</code></p>
+              <div class="dropzone-status" id="beliefDropStatus">Chưa chọn file (Kéo thả hoặc click)</div>
+            </div>
+          </div>
+
+          <!-- Quick Paste Fallback Accordion -->
+          <details class="paste-details">
+            <summary>Hoặc dán trực tiếp nội dung mã nguồn vào đây</summary>
+            <div class="paste-grid">
+              <div>
+                <label>Nội dung Agent ASL:</label>
+                <textarea id="pasteAgentText" class="form-control code-font" rows="6" placeholder="{ include(&quot;belief.asl&quot;) }&#10;!deliver_success.&#10;+!deliver_success <- !pickup_package; !handover_package."></textarea>
+              </div>
+              <div>
+                <label>Nội dung Belief ASL:</label>
+                <textarea id="pasteBeliefText" class="form-control code-font" rows="6" placeholder="arm_disconnected :- robot_arm_conn_failed & not package_loaded.&#10;path_blocked :- road_blocked_detected & not reroute_done."></textarea>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnCancelImport">Hủy</button>
+          <button class="btn btn-primary" id="btnConfirmImport">🚀 Phân Tích & Hiển Thị Sơ Đồ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toastContainer" class="toast-container"></div>
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script src="samples.js"></script>
+  <script src="parser.js"></script>
+  <script src="model.js"></script>
+  <script src="canvas.js"></script>
+  <script src="simulator.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -264,6 +264,24 @@ public class JaCaMoLauncher extends RunLocalMAS {
             }
             platforms.add(0,p);
         }
+
+        boolean ginsp = false;
+        for (Platform pl : platforms) {
+            if (pl instanceof GoalModelWebInspector) {
+                ginsp = true;
+                break;
+            }
+        }
+        if (!ginsp) {
+            GoalModelWebInspector gp = new GoalModelWebInspector();
+            try {
+                gp.setJcmProject(getJaCaMoProject());
+                gp.init(null);
+                platforms.add(gp);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     /** get packages from the project and add them into Config (map from pkg id -> file), used by .include */
