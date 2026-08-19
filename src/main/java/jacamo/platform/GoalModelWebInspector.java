@@ -146,21 +146,30 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
         StringBuilder sb = new StringBuilder("{");
         sb.append("\"agents\": [");
 
+        boolean first = true;
+        java.util.Set<String> processedPaths = new java.util.HashSet<>();
+
         try {
             if (this.project != null && this.project.getAgents() != null) {
-                boolean first = true;
                 for (AgentParameters ap : this.project.getAgents()) {
+                    String agName = ap.getAgName();
+                    String srcPath = "";
+                    String code = "";
+                    try {
+                        if (ap.getSourceAsFile() != null && ap.getSourceAsFile().exists()) {
+                            File f = ap.getSourceAsFile();
+                            srcPath = f.getPath();
+                            processedPaths.add(f.getAbsolutePath());
+                            code = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+                        }
+                    } catch (Exception ignored) {}
+
                     if (!first) sb.append(",");
                     first = false;
                     sb.append("{");
-                    sb.append("\"name\": \"").append(escapeJson(ap.getAgName())).append("\",");
-                    String src = "";
-                    try {
-                        if (ap.getSourceAsFile() != null) {
-                            src = ap.getSourceAsFile().getPath();
-                        }
-                    } catch (Exception ignored) {}
-                    sb.append("\"aslSource\": \"").append(escapeJson(src)).append("\"");
+                    sb.append("\"name\": \"").append(escapeJson(agName)).append("\",");
+                    sb.append("\"aslSource\": \"").append(escapeJson(srcPath)).append("\",");
+                    sb.append("\"aslCode\": \"").append(escapeJson(code)).append("\"");
                     sb.append("}");
                 }
             }
@@ -168,24 +177,63 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
             logger.warning("Error reading agents from project: " + e.getMessage());
         }
 
+        // Fallback: Scan src/agt directory for .asl files
+        try {
+            File agtDir = new File("src/agt");
+            if (agtDir.exists() && agtDir.isDirectory()) {
+                java.util.List<File> aslFiles = new java.util.ArrayList<>();
+                collectAslFiles(agtDir, aslFiles);
+                for (File f : aslFiles) {
+                    if (!processedPaths.contains(f.getAbsolutePath())) {
+                        String agName = f.getName().replace(".asl", "");
+                        String code = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+                        if (!first) sb.append(",");
+                        first = false;
+                        sb.append("{");
+                        sb.append("\"name\": \"").append(escapeJson(agName)).append("\",");
+                        sb.append("\"aslSource\": \"").append(escapeJson(f.getPath())).append("\",");
+                        sb.append("\"aslCode\": \"").append(escapeJson(code)).append("\"");
+                        sb.append("}");
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
         sb.append("]}");
         return sb.toString();
     }
 
+    private void collectAslFiles(File dir, java.util.List<File> result) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            if (f.isDirectory()) {
+                collectAslFiles(f, result);
+            } else if (f.isFile() && f.getName().endsWith(".asl")) {
+                result.add(f);
+            }
+        }
+    }
+
     private String escapeJson(String s) {
         if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     private byte[] loadResourceOrFile(String relativePath) {
         String cleanPath = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
 
-        // 1. Try local project path: tools/goal-modeler/...
+        // 1. Try local project path: tools/asl-visual-editor/dist/... or resources
         String[] possibleFilePaths = {
-            "tools/goal-modeler/" + cleanPath,
-            "../../tools/goal-modeler/" + cleanPath,
-            cleanPath,
-            "src/main/resources/goal-modeler/" + cleanPath
+            "tools/asl-visual-editor/dist/" + cleanPath,
+            "../../tools/asl-visual-editor/dist/" + cleanPath,
+            "src/main/resources/asl-visual-editor/" + cleanPath,
+            "../../src/main/resources/asl-visual-editor/" + cleanPath,
+            cleanPath
         };
 
         for (String p : possibleFilePaths) {
@@ -197,8 +245,8 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
             }
         }
 
-        // 2. Try ClassLoader Resource: /goal-modeler/...
-        try (InputStream is = getClass().getResourceAsStream("/goal-modeler/" + cleanPath)) {
+        // 2. Try ClassLoader Resource: /asl-visual-editor/...
+        try (InputStream is = getClass().getResourceAsStream("/asl-visual-editor/" + cleanPath)) {
             if (is != null) {
                 return is.readAllBytes();
             }

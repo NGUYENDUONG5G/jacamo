@@ -1,0 +1,30 @@
+{
+  "name": "asl-visual-editor",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3274",
+    "build": "tsc && vite build",
+    "preview": "vite preview --port 3274",
+    "test": "npx tsx test/roundtrip.test.js"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.4.2",
+    "@monaco-editor/react": "^4.7.0",
+    "lucide-react": "^1.16.0",
+    "dagre": "^0.8.5",
+    "zustand": "^5.0.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/dagre": "^0.7.52",
+    "@types/node": "^22.13.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  }
+}
