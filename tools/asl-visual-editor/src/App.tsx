@@ -16,6 +16,8 @@ import { GoalNodeComponent } from './components/nodes/GoalNodeComponent';
 import { InternalActionNodeComponent } from './components/nodes/InternalActionNodeComponent';
 import { AslEditor } from './components/AslEditor';
 import { Inspector } from './components/Inspector';
+import { SimulationPanel } from './components/SimulationPanel';
+import { ImportAslModal, AslFileItem } from './components/ImportAslModal';
 import {
   GitFork,
   Zap,
@@ -23,7 +25,8 @@ import {
   Upload,
   FileCode,
   LayoutGrid,
-  CheckCircle2
+  CheckCircle2,
+  Activity
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -45,10 +48,14 @@ export const App: React.FC = () => {
     aslCode: string;
   }
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [importNotice, setImportNotice] = React.useState<string | null>(null);
   const [projectAgents, setProjectAgents] = React.useState<AgentInfo[]>([]);
   const [selectedAgentName, setSelectedAgentName] = React.useState<string>('');
+  const [isSimulationOpen, setIsSimulationOpen] = React.useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = React.useState<boolean>(false);
+
+  const [agentFile, setAgentFile] = React.useState<AslFileItem | null>(null);
+  const [beliefFile, setBeliefFile] = React.useState<AslFileItem | null>(null);
 
   const nodeTypes: NodeTypes = useMemo(() => ({
     goalNode: GoalNodeComponent,
@@ -172,26 +179,22 @@ export const App: React.FC = () => {
   };
 
   const handleImportClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-      fileInputRef.current.click();
-    }
+    setIsImportModalOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (text !== undefined) {
-        setCode(text);
-        setImportNotice(`Đã import thành công: ${file.name}`);
-        setTimeout(() => setImportNotice(null), 3000);
-      }
-    };
-    reader.readAsText(file);
+  const handleApplyFiles = (aFile: AslFileItem | null, bFile: AslFileItem | null) => {
+    setAgentFile(aFile);
+    setBeliefFile(bFile);
+    if (aFile) {
+      setCode(aFile.code);
+      const agName = aFile.filename.replace('.asl', '');
+      setSelectedAgentName(agName);
+      setImportNotice(`Đã nạp file: ${aFile.filename}${bFile ? ` & ${bFile.filename}` : ''}`);
+      setTimeout(() => setImportNotice(null), 3500);
+    } else if (bFile) {
+      setImportNotice(`Đã nạp file: ${bFile.filename}`);
+      setTimeout(() => setImportNotice(null), 3500);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -217,14 +220,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-container" onDrop={handleDrop} onDragOver={handleDragOver}>
-      {/* Hidden File Input */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".asl,.txt"
-        style={{ display: 'none' }}
-      />
 
       {/* Top Header Navbar */}
       <header className="app-header">
@@ -262,6 +257,15 @@ export const App: React.FC = () => {
               </select>
             </div>
           )}
+
+          <button
+            className={`header-btn simulation-btn ${isSimulationOpen ? 'active' : ''}`}
+            onClick={() => setIsSimulationOpen(!isSimulationOpen)}
+            title="Mở Bảng điều khiển Mô phỏng & Nạp Belief"
+          >
+            <Activity size={14} className="text-cyan-400" />
+            <span>Mô phỏng & Beliefs</span>
+          </button>
 
           <button className="header-btn import-btn" onClick={handleImportClick} title="Import file .asl từ máy tính">
             <Upload size={14} /> Import .asl
@@ -373,6 +377,26 @@ export const App: React.FC = () => {
           />
         </aside>
       </main>
+
+      {/* 2-Slot Import Modal Dialog */}
+      <ImportAslModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        initialAgentFile={agentFile}
+        initialBeliefFile={beliefFile}
+        onApply={handleApplyFiles}
+      />
+
+      {/* Slide-over Simulation Panel */}
+      <SimulationPanel
+        isOpen={isSimulationOpen}
+        onClose={() => setIsSimulationOpen(false)}
+        selectedAgentName={selectedAgentName}
+        onSelectAgent={(name) => setSelectedAgentName(name)}
+        importedAgentFile={agentFile}
+        importedBeliefFile={beliefFile}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
+      />
     </div>
   );
 };
