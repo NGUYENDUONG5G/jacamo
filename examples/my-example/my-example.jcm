@@ -1,42 +1,34 @@
-mas my_example {
+mas iCleaner_MAS {
 
-    agent delivery_truck : delivery_truck/delivery_truck.asl {
+    agent icleaner : icleaner/icleaner.asl {
         ag-class: jacamo.platform.ExtendedAgent
         join: w1
-        focus: w1.navigation
+        focus: w1.battery, w1.charging_station, w1.dustbin, w1.room
     }
 
     workspace w1 {
-        artifact navigation : tools.DeliverySystem("warehouse")
+        artifact battery          : tools.BatteryArtifact(100)
+        artifact charging_station : tools.ChargingStation("dock_station_A")
+        artifact dustbin          : tools.DustbinArtifact("external_dustbin_1")
+        artifact room             : tools.RoomEnvironment("living_room_1")
     }
 
     organisation o1 : src/org/my-org.xml {
-        group my_team : team {
+        group cleaner_team : team {
             responsible-for: s1
         }
-        scheme s1 : delivery_scheme {
+        scheme s1 : cleaning_scheme {
         }
     }
 
-    failure deliver_on_time {
-        error gps_failed {
-            conditions: gps(broken)
-            recovery-activities: "plan:use_paper_map"
-        }
-        error delivery_delayed {
-            conditions: traffic(congested)
-            recovery-activities: "goal:plan_route", 
-            "goal:deliver_on_time", 
-            "env:w1.navigation.speedUp", 
-            "org:my_team.upgrade_priority"
-        }
-        error out_of_fuel {
-            conditions: fuel(empty)
-            recovery-activities: "goal:refuel", 
-            "env:w1.navigation.find_gas_station", 
-            "org:my_team.request_fuel_allowance"
+    failure battery_loaded {
+        error charging_station_too_distant {
+            conditions: station_too_distant
+            recovery-activities: "goal:emergency_move", 
+                                "goal:send_rescue_signal", 
+                                "env:w1.charging_station.call_support"
         }
     }
 
-    class-path:  bin/classes
+    class-path: bin/classes
 }

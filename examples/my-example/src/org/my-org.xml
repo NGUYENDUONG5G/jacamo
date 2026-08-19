@@ -2,7 +2,7 @@
 <?xml-stylesheet href="https://moise-lang.github.io/xml/os.xsl" type="text/xsl" ?>
 
 <organisational-specification
-    id="delivery_org"
+    id="cleaning_org"
     os-version="1.1"
     xmlns='http://moise.sourceforge.net/os'
     xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
@@ -11,43 +11,48 @@
 
     <structural-specification>
         <role-definitions>
-            <role id="dispatcher" />
-            <role id="truck" />
+            <role id="cleaner" />
+            <role id="supervisor" />
         </role-definitions>
 
         <group-specification id="team">
             <roles>
-                <role id="dispatcher" min="1" max="1" />
-                <role id="truck" min="1" max="10" />
+                <role id="cleaner" min="1" max="5" />
+                <role id="supervisor" min="0" max="1" />
             </roles>
             <formation-constraints>
-                <compatibility from="dispatcher" to="truck" scope="intra-group" bi-dir="true"/>
+                <compatibility from="cleaner" to="supervisor" scope="intra-group" bi-dir="true"/>
             </formation-constraints>
         </group-specification>
     </structural-specification>
 
     <functional-specification>
-        <scheme id="delivery_scheme">
-            <goal id="deliver_package">
-                <plan operator="sequence">
-                    <goal id="plan_route" />
-                    <goal id="deliver_on_time" />
+        <scheme id="cleaning_scheme">
+            <goal id="maintain_cleanliness">
+                <plan operator="parallel">
+                    <goal id="observe_environment">
+                        <plan operator="sequence">
+                            <goal id="locate_next_target" />
+                            <goal id="move_to_target" />
+                        </plan>
+                    </goal>
+                    <goal id="clean_room" />
+                    <goal id="battery_loaded" />
                 </plan>
             </goal>
 
-            <mission id="dispatch_mission" min="1" max="1">
-                <goal id="plan_route" />
-            </mission>
-            
-            <mission id="delivery_mission" min="1" max="10">
-                <goal id="deliver_on_time" />
+            <mission id="cleaner_mission" min="1" max="5">
+                <goal id="observe_environment" />
+                <goal id="locate_next_target" />
+                <goal id="move_to_target" />
+                <goal id="clean_room" />
+                <goal id="battery_loaded" />
             </mission>
         </scheme>
     </functional-specification>
 
     <normative-specification>
-        <norm id="n1" type="obligation" role="dispatcher" mission="dispatch_mission" />
-        <norm id="n2" type="obligation" role="truck" mission="delivery_mission" />
+        <norm id="n1" type="obligation" role="cleaner" mission="cleaner_mission" />
     </normative-specification>
 
 </organisational-specification>
