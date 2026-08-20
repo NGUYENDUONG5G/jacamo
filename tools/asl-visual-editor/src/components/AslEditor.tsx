@@ -43,27 +43,28 @@ export const AslEditor: React.FC<AslEditorProps> = ({ value, onChange }) => {
       }
     });
 
-    monaco.editor.defineTheme('agentspeak-dark', {
-      base: 'vs-dark',
+    monaco.editor.defineTheme('agentspeak-light', {
+      base: 'vs',
       inherit: true,
       rules: [
         { token: 'comment', foreground: '6A737D', fontStyle: 'italic' },
-        { token: 'tag', foreground: 'E5C07B', fontStyle: 'bold' },
-        { token: 'type.goal', foreground: '61AFEF', fontStyle: 'bold' },
-        { token: 'type.testgoal', foreground: '98C379' },
-        { token: 'variable.trigger', foreground: 'D19A66' },
-        { token: 'operator.arrow', foreground: 'C678DD', fontStyle: 'bold' },
-        { token: 'operator.context', foreground: 'E06C75', fontStyle: 'bold' },
-        { token: 'keyword.action', foreground: '56B6C2' },
-        { token: 'variable.parameter', foreground: 'E5C07B' },
-        { token: 'string', foreground: '98C379' },
-        { token: 'number', foreground: 'D19A66' }
+        { token: 'tag', foreground: 'B45309', fontStyle: 'bold' },
+        { token: 'type.goal', foreground: '0284C7', fontStyle: 'bold' },
+        { token: 'type.testgoal', foreground: '059669' },
+        { token: 'variable.trigger', foreground: 'D97706' },
+        { token: 'operator.arrow', foreground: '7C3AED', fontStyle: 'bold' },
+        { token: 'operator.context', foreground: 'E11D48', fontStyle: 'bold' },
+        { token: 'keyword.action', foreground: '0891B2' },
+        { token: 'variable.parameter', foreground: 'B45309' },
+        { token: 'string', foreground: '059669' },
+        { token: 'number', foreground: 'D97706' }
       ],
       colors: {
-        'editor.background': '#0f172a',
-        'editor.foreground': '#f8fafc',
-        'editor.lineHighlightBackground': '#1e293b50',
-        'editorLineNumber.foreground': '#475569'
+        'editor.background': '#ffffff',
+        'editor.foreground': '#0f172a',
+        'editor.lineHighlightBackground': '#f8fafc',
+        'editorLineNumber.foreground': '#94a3b8',
+        'editorGutter.background': '#ffffff'
       }
     });
   };
@@ -74,7 +75,7 @@ export const AslEditor: React.FC<AslEditorProps> = ({ value, onChange }) => {
         height="100%"
         defaultLanguage="agentspeak"
         language="agentspeak"
-        theme="agentspeak-dark"
+        theme="agentspeak-light"
         value={value}
         onChange={handleEditorChange}
         beforeMount={handleEditorWillMount}

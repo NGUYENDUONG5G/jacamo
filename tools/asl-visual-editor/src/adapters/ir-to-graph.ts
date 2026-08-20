@@ -129,13 +129,13 @@ export class IRToGraphAdapter {
                   strokeDasharray: isRecursive ? '5,5' : undefined
                 },
                 labelStyle: {
-                  fill: isRecursive ? '#f87171' : isOrBranch ? '#60a5fa' : '#34d399',
+                  fill: isRecursive ? '#dc2626' : isOrBranch ? '#2563eb' : '#059669',
                   fontWeight: 700,
                   fontSize: 10,
                   fontFamily: 'monospace'
                 },
                 labelBgStyle: {
-                  fill: '#0f172a',
+                  fill: '#ffffff',
                   stroke: isRecursive ? '#ef4444' : isOrBranch ? '#3b82f6' : '#10b981',
                   strokeWidth: 1
                 },
@@ -174,9 +174,9 @@ export class IRToGraphAdapter {
                 target: actionNodeId,
                 label: 'Action',
                 type: 'smoothstep',
-                style: { stroke: '#a855f7', strokeWidth: 1.5, strokeDasharray: '3,3' },
-                labelStyle: { fill: '#c084fc', fontWeight: 600, fontSize: 9, fontFamily: 'monospace' },
-                labelBgStyle: { fill: '#0f172a', stroke: '#a855f7', strokeWidth: 1 },
+                style: { stroke: '#8b5cf6', strokeWidth: 1.5, strokeDasharray: '3,3' },
+                labelStyle: { fill: '#7c3aed', fontWeight: 600, fontSize: 9, fontFamily: 'monospace' },
+                labelBgStyle: { fill: '#ffffff', stroke: '#8b5cf6', strokeWidth: 1 },
                 labelBgPadding: [3, 1],
                 labelBgBorderRadius: 3,
                 data: { branchType: 'ACTION' }

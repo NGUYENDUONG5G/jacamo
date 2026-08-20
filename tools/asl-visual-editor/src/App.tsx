@@ -339,13 +339,13 @@ export const App: React.FC = () => {
               minZoom={0.2}
               maxZoom={1.8}
             >
-              <Background color="#334155" gap={20} size={1} />
+              <Background color="#cbd5e1" gap={20} size={1} />
               <Controls className="react-flow-controls" />
               <MiniMap
                 nodeColor={(node: any) =>
-                  node.data.type === 'goal' ? '#3b82f6' : '#a855f7'
+                  node.data.type === 'goal' ? '#3b82f6' : '#8b5cf6'
                 }
-                maskColor="rgba(15, 23, 42, 0.7)"
+                maskColor="rgba(241, 245, 249, 0.7)"
                 className="react-flow-minimap"
               />
 
