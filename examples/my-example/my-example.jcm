@@ -1,7 +1,6 @@
 mas iCleaner_MAS {
 
     agent icleaner : icleaner/icleaner.asl {
-        ag-class: jacamo.platform.ExtendedAgent
         join: w1
         focus: w1.battery, w1.charging_station, w1.dustbin, w1.room
     }

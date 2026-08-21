@@ -70,8 +70,7 @@ public class and_branches extends DefaultInternalAction {
             for (int i = 0; i < newSteps.size() - 1; i++) {
                 newSteps.get(i).setBodyNext(newSteps.get(i + 1));
             }
-            newSteps.get(newSteps.size() - 1).setBodyNext(remainingSteps);
-            currentStep.setBodyNext(newSteps.get(0));
+            im.insertAsNextStep(newSteps.get(0));
         }
 
         return true;

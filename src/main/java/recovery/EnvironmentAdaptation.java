@@ -5,9 +5,6 @@ import jaca.CAgentArch;
 import cartago.ArtifactId;
 import java.util.logging.Level;
 
-/**
- * Adapts the Environment dimension by invoking operations on artifacts within a workspace.
- */
 public class EnvironmentAdaptation<T extends Agent> implements RecoveryActivity<T> {
     private final String workspaceName;
     private final String artifactName;
@@ -33,7 +30,6 @@ public class EnvironmentAdaptation<T extends Agent> implements RecoveryActivity<
 
     @Override
     public void execute(T agent) {
-        agent.getTS().getLogger().info("[Adaptation -> Environment] Target workspace: " + workspaceName + ", artifact: " + artifactName + ", operation: " + operationName);
         try {
             jason.architecture.AgArch arch = agent.getTS().getAgArch().getFirstAgArch();
             CAgentArch cartagoArch = null;
@@ -55,17 +51,8 @@ public class EnvironmentAdaptation<T extends Agent> implements RecoveryActivity<
                 }
                 ArtifactId aid = wsp.getArtifact(artifactName);
                 if (aid != null) {
-                    agent.getTS().getLogger().info("[Environment Adaptation] Invoking op: " + operationName + " on " + aid);
-                    try {
-                        cartagoArch.getSession().doAction(aid, new cartago.Op(operationName), null, -1);
-                    } catch (Exception ex) {
-                        agent.getTS().getLogger().log(Level.SEVERE, "CArtAgO operation invocation failed", ex);
-                    }
-                } else {
-                    agent.getTS().getLogger().warning("[Environment Adaptation] Artifact " + artifactName + " not found in workspace: " + workspaceName);
+                    cartagoArch.getSession().doAction(aid, new cartago.Op(operationName), null, -1);
                 }
-            } else {
-                agent.getTS().getLogger().warning("[Environment Adaptation] CAgentArch not found for agent: " + agent.getTS().getUserAgArch().getAgName());
             }
         } catch (Exception e) {
             agent.getTS().getLogger().log(Level.SEVERE, "Failed to execute environment adaptation", e);

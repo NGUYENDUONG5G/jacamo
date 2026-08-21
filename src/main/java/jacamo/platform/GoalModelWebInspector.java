@@ -15,10 +15,6 @@ import com.sun.net.httpserver.HttpServer;
 
 import jason.mas2j.AgentParameters;
 
-/**
- * Web Inspector for JaCaMo Goal Modeling & Failure Recovery Visual Studio.
- * Serves the Goal Modeler UI on port 3274 (or next available).
- */
 public class GoalModelWebInspector extends DefaultPlatformImpl {
 
     private static GoalModelWebInspector singleton = null;
@@ -83,7 +79,6 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
     protected void registerHttpHandlers() {
         if (httpServer == null) return;
 
-        // Static files handler
         httpServer.createContext("/", new HttpHandler() {
             @Override
             public void handle(HttpExchange exchange) throws IOException {
@@ -92,7 +87,6 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                     path = "/index.html";
                 }
 
-                // Check API routes
                 if (path.startsWith("/api/")) {
                     handleApiRequest(exchange, path);
                     return;
@@ -311,7 +305,7 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
     private String handleInjectBelief(String body) {
         String agentName = getJsonField(body, "agent");
         String beliefStr = getJsonField(body, "belief");
-        String action = getJsonField(body, "action"); // "add" or "remove"
+        String action = getJsonField(body, "action");
         if (action.isEmpty()) action = "add";
 
         if (agentName.isEmpty() || beliefStr.isEmpty()) {
@@ -334,7 +328,7 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                         }
                         logger.info("❌ [Web Simulation] Removed belief: " + beliefStr + " from agent: " + agentName);
                     } else {
-                        // If replacing property e.g. battery_level(20) replacing battery_level(85)
+
                         if (lit.getArity() > 0) {
                             try {
                                 jason.asSyntax.Literal pattern = jason.asSyntax.ASSyntax.createLiteral(lit.getFunctor(), new jason.asSyntax.VarTerm("_"));
@@ -345,7 +339,6 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                         logger.info("🎯 [Web Simulation] Injected belief: " + beliefStr + " into agent: " + agentName);
                     }
 
-                    // Wake agent architecture for reasoning cycle re-evaluation
                     if (agArch.getTS().getUserAgArch() != null) {
                         agArch.getTS().getUserAgArch().wake();
                     }
@@ -437,7 +430,6 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
 
         sb.append("], \"allFiles\": [");
 
-        // Scan all .asl files in src/agt
         try {
             File agtDir = new File("src/agt");
             if (agtDir.exists() && agtDir.isDirectory()) {
@@ -487,7 +479,6 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
     private byte[] loadResourceOrFile(String relativePath) {
         String cleanPath = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
 
-        // 1. Try local project path: tools/asl-visual-editor/dist/... or resources
         String[] possibleFilePaths = {
             "tools/asl-visual-editor/dist/" + cleanPath,
             "../../tools/asl-visual-editor/dist/" + cleanPath,
@@ -505,7 +496,6 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
             }
         }
 
-        // 2. Try ClassLoader Resource: /asl-visual-editor/...
         try (InputStream is = getClass().getResourceAsStream("/asl-visual-editor/" + cleanPath)) {
             if (is != null) {
                 return is.readAllBytes();

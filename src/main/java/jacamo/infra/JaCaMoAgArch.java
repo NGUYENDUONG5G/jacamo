@@ -13,6 +13,7 @@ import jason.asSyntax.ListTerm;
 import jason.asSyntax.ListTermImpl;
 import jason.asSyntax.Literal;
 import jason.runtime.Settings;
+import recovery.setup.AgentFailureModelManager;
 
 /**
  * This class provides an agent architecture when using JaCaMo
@@ -26,6 +27,7 @@ public class JaCaMoAgArch extends AgArch {
     private static final long serialVersionUID = 1L;
     
     public static Atom jcmAtom = new Atom("jcm");
+    private AgentFailureModelManager failureManager;
 
     @Override
     public void init() throws Exception {
@@ -111,15 +113,30 @@ public class JaCaMoAgArch extends AgArch {
 
         if (! lart.isEmpty()) {
             if (getTS().getLogger().isLoggable(Level.FINE)) getTS().getLogger().fine("producing goal to focus on "+lart);
-            Intention i = new Intention();
-            i.setAtomic(1); // force this event to be selected first
-            getTS().getC().addAchvGoal( ASSyntax.createLiteral(jcmAtom, "focus_env_art", lart, ASSyntax.createNumber(5)), i);
+            getTS().getC().addAchvGoal( ASSyntax.createLiteral(jcmAtom, "focus_env_art", lart, ASSyntax.createNumber(5)), null);
         }
 
         if (! lroles.isEmpty()) {
             if (getTS().getLogger().isLoggable(Level.FINE)) getTS().getLogger().fine("producing goal for initial roles "+lroles);
-            getTS().getC().addAchvGoal( ASSyntax.createLiteral(jcmAtom, "initial_roles", lroles, ASSyntax.createNumber(5)), Intention.EmptyInt);
+            getTS().getC().addAchvGoal( ASSyntax.createLiteral(jcmAtom, "initial_roles", lroles, ASSyntax.createNumber(5)), null);
         }
+
+        if (ap.getProject() != null && ap.getProject().getFailureModel() != null) {
+            failureManager = new AgentFailureModelManager(getTS().getAg());
+            failureManager.setup();
+        }
+    }
+
+    @Override
+    public void reasoningCycleStarting() {
+        super.reasoningCycleStarting();
+        if (failureManager != null) {
+            failureManager.monitor();
+        }
+    }
+
+    public AgentFailureModelManager getFailureManager() {
+        return failureManager;
     }
 
     protected CAgentArch getCartagoArch() {

@@ -56,7 +56,7 @@ public class or_branches extends DefaultInternalAction {
                 List<Plan> candidatePlans = ts.getAg().getPL().getCandidatePlans(te);
                 if (candidatePlans != null && !candidatePlans.isEmpty()) {
                     for (Plan plan : candidatePlans) {
-                        if (plan.getContext() == null || 
+                        if (plan.getContext() == null ||
                             plan.getContext().logicalConsequence(ts.getAg(), un).hasNext()) {
                             selectedCandidate = t;
                             break;
@@ -93,8 +93,7 @@ public class or_branches extends DefaultInternalAction {
             }
         }
 
-        currentStep.setBodyNext(selectedStep);
-        selectedStep.setBodyNext(remainingSteps);
+        im.insertAsNextStep(selectedStep);
 
         return true;
     }

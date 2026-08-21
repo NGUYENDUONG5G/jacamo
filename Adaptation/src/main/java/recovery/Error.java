@@ -1,9 +1,13 @@
 package recovery;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class Error<T> {
+    private static final Logger LOGGER = Logger.getLogger(Error.class.getName());
+
     private final String errorName;
     private final List<Condition<T>> conditions = new ArrayList<>();
     private final List<RecoveryActivity<T>> recoveryActivities = new ArrayList<>();
@@ -12,12 +16,24 @@ public class Error<T> {
         this.errorName = errorName;
     }
 
+    public String getErrorName() {
+        return errorName;
+    }
+
     public void addCondition(Condition<T> cond) {
         conditions.add(cond);
     }
 
     public void addRecoveryActivity(RecoveryActivity<T> action) {
         recoveryActivities.add(action);
+    }
+
+    public List<Condition<T>> getConditions() {
+        return Collections.unmodifiableList(conditions);
+    }
+
+    public List<RecoveryActivity<T>> getRecoveryActivities() {
+        return Collections.unmodifiableList(recoveryActivities);
     }
 
     public boolean isTriggered(T context) {
@@ -31,11 +47,7 @@ public class Error<T> {
     }
 
     public void performRecovery(T context) {
-        if (context instanceof jason.asSemantics.Agent) {
-            ((jason.asSemantics.Agent) context).getTS().getLogger().info("[Error Handler] Triggering recovery for: " + errorName);
-        } else {
-            System.out.println("[Error Handler] Triggering recovery for: " + errorName);
-        }
+        LOGGER.info("[Error Handler] Triggering recovery for: " + errorName);
         for (RecoveryActivity<T> activity : recoveryActivities) {
             activity.execute(context);
         }

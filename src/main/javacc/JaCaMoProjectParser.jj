@@ -278,11 +278,13 @@ void agent() :              { Token agType; Token agName; Token qty; Token opt; 
                                                              (<EOL>|",")+        { ag.addWorkspace(oval.toString()); } 
                               )+
         |  <ROLES>       ":"  (LOOKAHEAD(4) opt=<ATOM> <IN> oval=<ATOM>          { n = null; }
-                                  [ "@" t = <ATOM>                               { n = t.image; }
-                                  ]                           (<EOL>|",")+       { if (n != null) ag.addFocus(oval.toString(), null, n);
-                                                                                   ag.addRole(oval.toString(), opt.toString());
-                                                                                 }
-                              )*
+                                   [ "@" t = <ATOM>                               { n = t.image; }
+                                   ]                           (<EOL>|",")+       { if (n != null) ag.addFocus(oval.toString(), null, n);
+                                                                                    ag.addRole(oval.toString(), opt.toString());
+                                                                                  }
+                               )*
+        |  <FAILURE>     ":"  (LOOKAHEAD(4) oval=<ATOM>                          (<EOL>|",")+        { ag.addFailure(oval.toString()); }
+                              )+
         |  <DEBUG>       ":"  oval=literal() (<EOL>|",")+                        { ag.addOption("debug", oval.toString()); }
         |  opt=<ATOM>    ":"  (oval=<STRING> | oval=<REAL> | oval=<INT> | oval=literal() )
                                                               (<EOL>)+           { ag.addOption(opt.image,oval.toString()); }
@@ -358,6 +360,7 @@ void organisation() :       { Token t;  Token opt; Object oval;
            |  <AGENTS>      ":"  (LOOKAHEAD(4) (t = <ATOM>  | t = <AST>) (<EOL>|",")+  { project.addAgWorkspace(t.image,org); } )+
            //|  <NODE>        ":"  opt=<ATOM>                              (<EOL>)+      { org.setNode(opt.image); }
            |  <SITUATED>    ":"  opt=<ATOM>                              (<EOL>)+      { org.setInstitution(opt.image); }
+           |  <FAILURE>     ":"  (LOOKAHEAD(4) oval=<ATOM>               (<EOL>|",")+  { org.addFailure(oval.toString()); } )+
            |  opt=<ATOM>    ":"  (oval=<STRING> | oval=<REAL> | oval=<INT> | oval=literal() ) (<EOL>)+  { org.addParameter(opt.image,oval.toString()); }
        )
     )*
@@ -379,6 +382,7 @@ JaCaMoGroupParameters group(JaCaMoOrgParameters org) :
               sg = group(org)                        { g.addSubGroup(sg); }
            |  <RESPFOR>     ":"  (t = <ATOM>  (<EOL>|",")+ { g.addResponsibleFor(t.image); } )+
            |  <DEBUG>  { oval = "inspector_gui(on)"; }   [ ":" oval=literal() ]  (<EOL>)+ { g.setDebug(oval.toString()); }
+           |  <FAILURE>     ":"  (LOOKAHEAD(4) oval=<ATOM>   (<EOL>|",")+ { g.addFailure(oval.toString()); } )+
            |  opt=<ATOM>    ":"  (oval=<STRING> | oval=<REAL> | oval=<INT> | oval=literal() ) (<EOL>)+  { g.addParameter(opt.image,oval.toString()); }
            |  <PLAYERS>     ":"  (LOOKAHEAD(4) t = <ATOM> r = <ATOM> (<EOL>|",")+     { project.addAgRole(t.image, org, g, r.image); } )+
        )
@@ -400,6 +404,7 @@ void scheme(JaCaMoOrgParameters org) :
   "{"  (<EOL>)*
   (
            <DEBUG>  { oval = "inspector_gui(on)"; }   [ ":" oval=literal() ]  (<EOL>)+ { s.setDebug(oval.toString()); }
+         | <FAILURE>     ":"  (LOOKAHEAD(4) oval=<ATOM>   (<EOL>|",")+ { s.addFailure(oval.toString()); } )+
          | opt=<ATOM>    ":"  (oval=<STRING> | oval=<REAL> | oval=<INT> | oval=literal() ) (<EOL>)+  { s.addParameter(opt.image,oval.toString()); }
   )*
   "}"

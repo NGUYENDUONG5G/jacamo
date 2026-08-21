@@ -1,9 +1,13 @@
 package recovery;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class Failure<T> {
+    private static final Logger LOGGER = Logger.getLogger(Failure.class.getName());
+
     private final String goalId;
     private final List<Error<T>> errors = new ArrayList<>();
 
@@ -11,18 +15,22 @@ public class Failure<T> {
         this.goalId = goalId;
     }
 
+    public String getGoalId() {
+        return goalId;
+    }
+
     public void addError(Error<T> error) {
         errors.add(error);
+    }
+
+    public List<Error<T>> getErrors() {
+        return Collections.unmodifiableList(errors);
     }
 
     public void monitor(T context) {
         for (Error<T> error : errors) {
             if (error.isTriggered(context)) {
-                if (context instanceof jason.asSemantics.Agent) {
-                    ((jason.asSemantics.Agent) context).getTS().getLogger().info("[Failure Monitor] Goal '" + goalId + "' failed due to error trigger.");
-                } else {
-                    System.out.println("[Failure Monitor] Goal '" + goalId + "' failed due to error trigger.");
-                }
+                LOGGER.info("[Failure Monitor] Goal '" + goalId + "' failed due to error trigger: " + error.getErrorName());
                 error.performRecovery(context);
             }
         }

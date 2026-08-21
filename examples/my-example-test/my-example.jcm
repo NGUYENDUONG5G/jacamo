@@ -1,23 +1,76 @@
 mas my_example {
 
-    agent delivery_truck : delivery_truck/delivery_truck.asl {
-        ag-class: jacamo.platform.ExtendedAgent
+    // ========================================================================
+    // 1. TÁC TỬ (AGENTS)
+    // ========================================================================
+    
+    // Tác tử điều phối viên kho vận (Dispatcher)
+    agent dispatcher : dispatcher/dispatcher.asl {
         join: w1
-        focus: w1.navigation
+        failure: dispatcher_coordination
     }
 
+    // Tác tử xe tải giao hàng tự hành (Delivery Truck)
+    agent delivery_truck : delivery_truck/delivery_truck.asl {
+        join: w1
+        focus: w1.navigation
+        failure: pickup_package, transit_to_delivery, handover_package, complete_cycle
+    }
+
+    // ========================================================================
+    // 2. MÔI TRƯỜNG & KHÔNG GIAN LÀM VIỆC (WORKSPACE)
+    // ========================================================================
     workspace w1 {
         artifact navigation : tools.DeliverySystem("warehouse_dock_A")
     }
 
+    // ========================================================================
+    // 3. TỔ CHỨC MOISE (ORGANISATION)
+    // ========================================================================
     organisation o1 : src/org/my-org.xml {
         group my_team : team {
             responsible-for: s1
+            players: dispatcher     dispatcher
+                     delivery_truck delivery_robot
+            failure: dispatcher_coordination
         }
+
         scheme s1 : delivery_scheme {
+            failure: delivery_scheme_execution
         }
     }
 
+    // ========================================================================
+    // 4. ĐẶC TẢ FAILURE MODEL CHO TỔ CHỨC (ORGANISATION FAILURES)
+    // ========================================================================
+    
+    // Giám sát phối hợp tổ chức trong nhóm giao hàng
+    failure dispatcher_coordination {
+        error missing_dispatcher {
+            conditions: "cardinality(dispatcher) < 1"
+            recovery-activities: "org:my_team.adoptRole(dispatcher)", 
+                                "goal:notify_fleet_manager"
+        }
+        error fleet_overloaded {
+            conditions: "cardinality(delivery_robot) > 8"
+            recovery-activities: "goal:reassign_urgent_deliveries"
+        }
+    }
+
+    // Giám sát tiến độ thực thi đồ hình kế hoạch chung (Scheme)
+    failure delivery_scheme_execution {
+        error scheme_timeout {
+            conditions: scheme_deadlock
+            recovery-activities: "org:s1.substitute_scheme(emergency_delivery_scheme)", 
+                                "env:w1.navigation.reroute"
+        }
+    }
+
+    // ========================================================================
+    // 5. ĐẶC TẢ FAILURE MODEL CHO TÁC TỬ (AGENT & ENVIRONMENT FAILURES)
+    // ========================================================================
+    
+    // [G1] Lấy hàng tại kho
     failure pickup_package {
         error robot_arm_error {
             conditions: arm_disconnected
@@ -33,7 +86,7 @@ mas my_example {
         }
     }
 
-  
+    // [G2] Di chuyển và điều hướng giao hàng
     failure transit_to_delivery {
         error road_blocked {
             conditions: path_blocked
@@ -49,7 +102,7 @@ mas my_example {
         }
     }
 
-  
+    // [G3] Bàn giao kiện hàng cho khách
     failure handover_package {
         error customer_timeout {
             conditions: wait_timeout
@@ -65,7 +118,7 @@ mas my_example {
         }
     }
 
-    
+    // [G4] Hoàn tất chu trình quay về trạm sạc
     failure complete_cycle {
         error dock_unavailable {
             conditions: docks_occupied

@@ -26,6 +26,7 @@ public class JaCaMoAgentParameters extends AgentParameters {
     protected Set<String>    wks   = new TreeSet<>();
     protected List<String[]> roles = new ArrayList<>(); // each [org,group,role]
     protected List<String[]> focus = new ArrayList<>(); // each [artId,wskId,host]
+    protected List<String>   failures = new ArrayList<>();
     protected JaCaMoProject  project;
 
     public JaCaMoAgentParameters(JaCaMoProject project) {
@@ -35,6 +36,13 @@ public class JaCaMoAgentParameters extends AgentParameters {
     public JaCaMoAgentParameters(JaCaMoProject project, AgentParameters a) {
         super(a);
         this.project = project;
+    }
+
+    public void addFailure(String f) {
+        failures.add(f);
+    }
+    public List<String> getFailures() {
+        return failures;
     }
 
     public void addInitBel(Literal l) {
@@ -68,6 +76,7 @@ public class JaCaMoAgentParameters extends AgentParameters {
         newap.wks = new HashSet<>(this.wks);
         newap.roles = new ArrayList<>(this.roles);
         newap.focus = new ArrayList<>(this.focus);
+        newap.failures = new ArrayList<>(this.failures);
         newap.project = this.project;
     }
 

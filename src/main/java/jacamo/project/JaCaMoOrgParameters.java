@@ -14,6 +14,7 @@ public class JaCaMoOrgParameters extends JaCaMoWorkspaceParameters {
     
     protected List<JaCaMoGroupParameters>  groups     = new ArrayList<>();
     protected List<JaCaMoSchemeParameters> schemes    = new ArrayList<>();
+    protected List<String>                 failures   = new ArrayList<>();
     protected Map<String,String>           parameters = new HashMap<>(); // like source ....
     protected String                       debug      = null;
     
@@ -21,6 +22,13 @@ public class JaCaMoOrgParameters extends JaCaMoWorkspaceParameters {
 
     public JaCaMoOrgParameters(JaCaMoProject project) {
         super(project);
+    }
+
+    public void addFailure(String f) {
+        failures.add(f);
+    }
+    public List<String> getFailures() {
+        return failures;
     }
 
     public void addParameter(String k, String v) {

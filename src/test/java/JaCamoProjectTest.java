@@ -108,5 +108,164 @@ public class JaCamoProjectTest {
         assertEquals("group_team.action_c", orgAct.getOrgDetails());
     }
 
+    @Test
+    public void testCompositeConditions() {
+        recovery.Condition<String> cond1 = ctx -> ctx.contains("error");
+        recovery.Condition<String> cond2 = ctx -> ctx.length() > 5;
+
+        recovery.AndCondition<String> andCond = new recovery.AndCondition<>(cond1, cond2);
+        assertTrue(andCond.evaluate("error_critical"));
+        org.junit.Assert.assertFalse(andCond.evaluate("err"));
+        org.junit.Assert.assertFalse(andCond.evaluate("warning_long"));
+
+        recovery.OrCondition<String> orCond = new recovery.OrCondition<>(cond1, cond2);
+        assertTrue(orCond.evaluate("error"));
+        assertTrue(orCond.evaluate("warning_long"));
+        org.junit.Assert.assertFalse(orCond.evaluate("ok"));
+    }
+
+    @Test
+    public void testAgentFailureModelManager() {
+        String jcmSource = "mas test_standard_agent {\n" +
+                           "    agent bob : bob.asl {}\n" +
+                           "    failure g1 {\n" +
+                           "        error e1 {\n" +
+                           "            conditions: battery(low)\n" +
+                           "            recovery-activities: \"plan:recharge\"\n" +
+                           "        }\n" +
+                           "    }\n" +
+                           "}\n";
+        try {
+            parser = new JaCaMoProjectParser(new StringReader(jcmSource));
+            JaCaMoProject project = parser.parse(".");
+            
+            var fmParams = project.getFailureModel();
+            assertTrue(fmParams != null);
+            
+            var failures = recovery.builder.FailureModelBuilder.buildFailures(fmParams);
+            assertEquals(1, failures.size());
+            assertEquals("g1", failures.get(0).getGoalId());
+            assertEquals(1, failures.get(0).getErrors().size());
+            assertEquals("e1", failures.get(0).getErrors().get(0).getErrorName());
+        } catch (Exception e) {
+            org.junit.Assert.fail("Test failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testScopedFailuresInJcm() {
+        String jcmSource = "mas test_scoped_failures {\n" +
+                           "    agent icleaner : icleaner.asl {\n" +
+                           "        failure: battery_loaded, move_fail\n" +
+                           "    }\n" +
+                           "    organisation o1 : my-org.xml {\n" +
+                           "        failure: org_fail_1\n" +
+                           "        group cleaner_team : team {\n" +
+                           "            failure: missing_cleaner_role\n" +
+                           "        }\n" +
+                           "        scheme s1 : cleaning_scheme {\n" +
+                           "            failure: scheme_stalled\n" +
+                           "        }\n" +
+                           "    }\n" +
+                           "    failure battery_loaded {\n" +
+                           "        error e1 {\n" +
+                           "            conditions: battery(low)\n" +
+                           "            recovery-activities: \"plan:recharge\"\n" +
+                           "        }\n" +
+                           "    }\n" +
+                           "}\n";
+        try {
+            parser = new JaCaMoProjectParser(new StringReader(jcmSource));
+            JaCaMoProject project = parser.parse(".");
+
+            var ag = (jacamo.project.JaCaMoAgentParameters) project.getAg("icleaner");
+            assertEquals(2, ag.getFailures().size());
+            assertTrue(ag.getFailures().contains("battery_loaded"));
+            assertTrue(ag.getFailures().contains("move_fail"));
+
+            var org = project.getOrg("o1");
+            assertEquals(1, org.getFailures().size());
+            assertTrue(org.getFailures().contains("org_fail_1"));
+
+            var grp = org.getGroup("cleaner_team");
+            assertEquals(1, grp.getFailures().size());
+            assertTrue(grp.getFailures().contains("missing_cleaner_role"));
+
+            var sch = org.getScheme("s1");
+            assertEquals(1, sch.getFailures().size());
+            assertTrue(sch.getFailures().contains("scheme_stalled"));
+
+            System.out.println("Scoped failures test passed successfully!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            org.junit.Assert.fail("Scoped failures parsing failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testOrgFailureModelManager() {
+        String jcmSource = "mas test_org_monitoring {\n" +
+                           "    organisation o1 : my-org.xml {\n" +
+                           "        failure: org_fail_1\n" +
+                           "        group cleaner_team : team {\n" +
+                           "            failure: missing_cleaner_role\n" +
+                           "        }\n" +
+                           "    }\n" +
+                           "    failure org_fail_1 {\n" +
+                           "        error e_org {\n" +
+                           "            conditions: org_broken\n" +
+                           "            recovery-activities: \"org:cleaner_team.adoptRole(leader)\"\n" +
+                           "        }\n" +
+                           "    }\n" +
+                           "    failure missing_cleaner_role {\n" +
+                           "        error e_grp {\n" +
+                           "            conditions: \"cardinality(cleaner) < 1\"\n" +
+                           "            recovery-activities: \"org:cleaner_team.adoptRole(cleaner)\"\n" +
+                           "        }\n" +
+                           "    }\n" +
+                           "}\n";
+        try {
+            parser = new JaCaMoProjectParser(new StringReader(jcmSource));
+            JaCaMoProject project = parser.parse(".");
+
+            recovery.setup.OrgFailureModelManager orgMgr = new recovery.setup.OrgFailureModelManager(project);
+            orgMgr.setup();
+
+            assertEquals(2, orgMgr.getOrgFailuresMap().size());
+            
+            // Test that monitor() runs cleanly without exceptions
+            orgMgr.monitor();
+            System.out.println("OrgFailureModelManager test passed successfully!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            org.junit.Assert.fail("OrgFailureModelManager failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testBranchesExecution() {
+        try {
+            jason.asSemantics.Agent ag = new jason.asSemantics.Agent();
+            ag.initAg();
+            
+            // Add plans using .and_branches and .or_branches
+            String asl = "+!test_and <- .and_branches([g1, g2]).\n" +
+                         "+!g1 <- +g1_done.\n" +
+                         "+!g2 <- +g2_done.\n" +
+                         "+!test_or <- .or_branches([branch_a, branch_b]).\n" +
+                         "+!branch_a : cond_a <- +branch_a_done.\n" +
+                         "+!branch_b <- +branch_b_done.\n";
+            jason.asSyntax.parser.as2j parser = new jason.asSyntax.parser.as2j(new java.io.StringReader(asl));
+            parser.agent(ag);
+            
+            assertTrue(ag.getPL().size() >= 4);
+            System.out.println(".and_branches and .or_branches parsed successfully in agent plan library!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            org.junit.Assert.fail("testBranchesExecution failed: " + e.getMessage());
+        }
+    }
 }
+
+
 
