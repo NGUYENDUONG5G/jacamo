@@ -23,7 +23,8 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
-  Folder
+  Folder,
+  X
 } from 'lucide-react';
 import { AslFileItem } from './ImportAslModal';
 
@@ -44,7 +45,7 @@ interface AgentIntention {
 interface AgentState {
   name: string;
   roles?: AgentRole[];
-  currentGoal?: string | null;
+  currentGoal?: string;
   intentions?: AgentIntention[];
   events?: string[];
   beliefs: string[];
@@ -53,6 +54,13 @@ interface AgentState {
 interface ArtifactProp {
   name: string;
   value: string;
+  values?: string[];
+  arity?: number;
+}
+
+interface ArtPropInputState {
+  name: string;
+  values: string[];
 }
 
 interface ArtifactState {
@@ -114,9 +122,58 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [newBelief, setNewBelief] = useState('');
-  const [artPropInputs, setArtPropInputs] = useState<Record<string, { name: string; value: string }>>({});
+  const [artPropInputs, setArtPropInputs] = useState<Record<string, ArtPropInputState>>({});
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [activeTab, setActiveTab] = useState<'agents' | 'organisation' | 'artifacts'>('agents');
+
+  const getPropInput = (artName: string): ArtPropInputState => {
+    return artPropInputs[artName] || { name: '', values: [''] };
+  };
+
+  const updatePropName = (artName: string, name: string) => {
+    setArtPropInputs(prev => {
+      const cur = prev[artName] || { name: '', values: [''] };
+      return { ...prev, [artName]: { ...cur, name } };
+    });
+  };
+
+  const updatePropValue = (artName: string, index: number, val: string) => {
+    setArtPropInputs(prev => {
+      const cur = prev[artName] || { name: '', values: [''] };
+      const newVals = [...cur.values];
+      newVals[index] = val;
+      return { ...prev, [artName]: { ...cur, values: newVals } };
+    });
+  };
+
+  const addPropValueField = (artName: string) => {
+    setArtPropInputs(prev => {
+      const cur = prev[artName] || { name: '', values: [''] };
+      return { ...prev, [artName]: { ...cur, values: [...cur.values, ''] } };
+    });
+  };
+
+  const removePropValueField = (artName: string, index: number) => {
+    setArtPropInputs(prev => {
+      const cur = prev[artName] || { name: '', values: [''] };
+      const newVals = cur.values.filter((_, i) => i !== index);
+      return { ...prev, [artName]: { ...cur, values: newVals.length > 0 ? newVals : [''] } };
+    });
+  };
+
+  const computeBeliefPreview = (name: string, values: string[]): string => {
+    if (!name.trim()) return '';
+    const cleanVals = values.filter(v => v !== undefined && v !== null && v.trim() !== '');
+    if (cleanVals.length === 0) return name.trim();
+    const formatted = cleanVals.map(v => {
+      const tv = v.trim();
+      if (tv.startsWith('"') || tv.startsWith("'") || /^-?\d+(\.\d+)?$/.test(tv) || /^[a-z][a-zA-Z0-9_]*$/.test(tv) || tv === 'true' || tv === 'false') {
+        return tv;
+      }
+      return `"${tv.replace(/"/g, '\\"')}"`;
+    });
+    return `${name.trim()}(${formatted.join(', ')})`;
+  };
 
   // Fetch simulation state
   const fetchSimulationState = async () => {
@@ -221,7 +278,7 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
     workspace: string,
     artifact: string,
     property: string,
-    value: string,
+    values: string | string[],
     action: 'define' | 'update' | 'remove' = 'define'
   ) => {
     if (!property.trim()) {
@@ -230,6 +287,8 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
     }
     setLoading(true);
     try {
+      const valuesList = Array.isArray(values) ? values.filter(v => v !== undefined && v !== null && v.trim() !== '') : (values ? [values.trim()] : []);
+      const valueStr = valuesList.join(', ');
       const res = await fetch('/api/simulation/artifact-property', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,16 +296,18 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
           workspace,
           artifact,
           property: property.trim(),
-          value: value.trim(),
+          value: valueStr,
+          values: valuesList,
           action
         })
       });
       const data = await res.json();
       if (data.success) {
+        const displayLabel = data.belief || `${property}${valueStr ? `(${valueStr})` : ''}`;
         showToast(
           action === 'remove'
             ? `❌ Đã xóa thuộc tính '${property}' khỏi artifact '${artifact}'`
-            : `✅ Đã tạo/cập nhật Observable Property '${property}: ${value || 'true'}' trên artifact '${artifact}' (Tạo Belief Môi trường!)`
+            : `✅ Đã tạo/cập nhật Observable Property '${displayLabel}' trên artifact '${artifact}' (Tạo Belief Môi trường!)`
         );
         await fetchSimulationState();
       } else {
@@ -910,7 +971,17 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
                       {!isCollapsed && (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
                           {w.artifacts.map((art, aIdx) => {
-                            const currentInput = artPropInputs[art.name] || { name: '', value: '' };
+                            const currentInput = getPropInput(art.name);
+                            const preview = computeBeliefPreview(currentInput.name, currentInput.values);
+                            const activeValCount = currentInput.values.filter(v => v.trim()).length;
+
+                            const submitCurrentProp = () => {
+                              if (currentInput.name.trim()) {
+                                handleArtifactProperty(w.name, art.name, currentInput.name, currentInput.values, 'define');
+                                setArtPropInputs(prev => ({ ...prev, [art.name]: { name: '', values: [''] } }));
+                              }
+                            };
+
                             return (
                               <div
                                 key={aIdx}
@@ -934,55 +1005,110 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
 
                                   {/* Form Tạo / Nạp Belief từ Môi trường vào Artifact */}
                                   <div className="bg-slate-900/90 border border-slate-800/90 rounded-xl p-3.5 sm:p-4 mb-4 shadow-inner">
-                                    <span className="text-[11px] font-semibold text-cyan-300 uppercase tracking-wide flex items-center gap-2 mb-3">
-                                      <Sparkles size={13} className="text-amber-400" /> Tạo Belief từ Môi trường (Observable Property):
-                                    </span>
-                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                                      <input
-                                        type="text"
-                                        placeholder="Thuộc tính"
-                                        value={currentInput.name}
-                                        onChange={(e) => setArtPropInputs(prev => ({
-                                          ...prev,
-                                          [art.name]: { ...(prev[art.name] || { value: '' }), name: e.target.value }
-                                        }))}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && currentInput.name.trim()) {
-                                            handleArtifactProperty(w.name, art.name, currentInput.name, currentInput.value || '', 'define');
-                                            setArtPropInputs(prev => ({ ...prev, [art.name]: { name: '', value: '' } }));
-                                          }
-                                        }}
-                                        className="flex-1 bg-slate-950 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 font-mono outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/40 transition-all"
-                                      />
-                                      <input
-                                        type="text"
-                                        placeholder="Giá trị"
-                                        value={currentInput.value}
-                                        onChange={(e) => setArtPropInputs(prev => ({
-                                          ...prev,
-                                          [art.name]: { ...(prev[art.name] || { name: '' }), value: e.target.value }
-                                        }))}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && currentInput.name.trim()) {
-                                            handleArtifactProperty(w.name, art.name, currentInput.name, currentInput.value || '', 'define');
-                                            setArtPropInputs(prev => ({ ...prev, [art.name]: { name: '', value: '' } }));
-                                          }
-                                        }}
-                                        className="w-full sm:w-32 bg-slate-950 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 font-mono outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/40 transition-all"
-                                      />
+                                    <div className="flex items-center justify-between mb-3">
+                                      <span className="text-[11px] font-semibold text-cyan-300 uppercase tracking-wide flex items-center gap-1.5">
+                                        <Sparkles size={13} className="text-amber-400 shrink-0" />
+                                        Tạo Belief từ Môi trường (Observable Property):
+                                      </span>
                                       <button
-                                        className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                        onClick={() => {
-                                          if (currentInput.name.trim()) {
-                                            handleArtifactProperty(w.name, art.name, currentInput.name, currentInput.value || '', 'define');
-                                            setArtPropInputs(prev => ({ ...prev, [art.name]: { name: '', value: '' } }));
-                                          }
-                                        }}
-                                        disabled={!currentInput.name.trim() || loading}
+                                        type="button"
+                                        onClick={() => addPropValueField(art.name)}
+                                        className="text-[11px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded flex items-center gap-1 font-medium transition-all cursor-pointer"
+                                        title="Thêm một ô trường giá trị (Value field)"
                                       >
-                                        <Plus size={14} />
-                                        <span>Nạp Belief</span>
+                                        <Plus size={11} /> + Thêm giá trị
                                       </button>
+                                    </div>
+
+                                    <div className="space-y-2.5">
+                                      {/* Tên thuộc tính */}
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="text"
+                                          placeholder="Thuộc tính / Predicate (VD: package_info)"
+                                          value={currentInput.name}
+                                          onChange={(e) => updatePropName(art.name, e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && currentInput.name.trim()) {
+                                              submitCurrentProp();
+                                            }
+                                          }}
+                                          className="flex-1 bg-slate-950 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 font-mono outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/40 transition-all"
+                                        />
+                                      </div>
+
+                                      {/* Danh sách các trường Giá trị */}
+                                      <div className="space-y-1.5">
+                                        {currentInput.values.map((val, valIdx) => (
+                                          <div key={valIdx} className="flex items-center gap-1.5">
+                                            <input
+                                              type="text"
+                                              placeholder={
+                                                currentInput.values.length === 1
+                                                  ? 'Giá trị (VD: pkg_01 hoặc phân tách bằng dấu phẩy)'
+                                                  : `Trường giá trị #${valIdx + 1} (VD: ${valIdx === 0 ? 'pkg_01' : valIdx === 1 ? 'HaNoi' : valIdx === 2 ? 'DaNang' : '12.5'})`
+                                              }
+                                              value={val}
+                                              onChange={(e) => updatePropValue(art.name, valIdx, e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  if (e.shiftKey && valIdx === currentInput.values.length - 1) {
+                                                    addPropValueField(art.name);
+                                                  } else if (currentInput.name.trim()) {
+                                                    submitCurrentProp();
+                                                  }
+                                                }
+                                              }}
+                                              className="flex-1 bg-slate-950 border border-slate-700/80 hover:border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 font-mono outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/40 transition-all"
+                                            />
+                                            {currentInput.values.length > 1 && (
+                                              <button
+                                                type="button"
+                                                onClick={() => removePropValueField(art.name, valIdx)}
+                                                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition-all shrink-0 cursor-pointer"
+                                                title="Xóa trường giá trị này"
+                                              >
+                                                <Trash2 size={13} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+
+                                      {/* Live Preview */}
+                                      {preview && (
+                                        <div className="p-2 bg-slate-950/80 border border-cyan-900/50 rounded-lg flex items-center justify-between text-xs font-mono">
+                                          <span className="text-slate-400 text-[11px] flex items-center gap-1 shrink-0">
+                                            <Sparkles size={11} className="text-amber-400" /> Xem trước:
+                                          </span>
+                                          <span className="text-cyan-300 font-semibold truncate pl-2 select-all">
+                                            {preview}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {/* Submit row */}
+                                      <div className="flex items-center justify-between pt-1 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => addPropValueField(art.name)}
+                                          className="text-xs text-slate-400 hover:text-cyan-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800/80 transition-all cursor-pointer"
+                                        >
+                                          <Plus size={12} className="text-cyan-400" />
+                                          <span>+ Thêm trường</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                          onClick={submitCurrentProp}
+                                          disabled={!currentInput.name.trim() || loading}
+                                        >
+                                          <Plus size={13} />
+                                          <span>
+                                            Nạp Belief {activeValCount > 1 ? `(${activeValCount} giá trị)` : ''}
+                                          </span>
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
 
@@ -994,31 +1120,48 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
                                       </span>
                                     </div>
                                     {art.properties.length > 0 ? (
-                                      <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
-                                        {art.properties.map((prop, pIdx) => (
-                                          <div
-                                            key={pIdx}
-                                            className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800/90 hover:border-slate-700 rounded-lg text-xs group transition-all"
-                                          >
-                                            <div className="flex items-center gap-2 min-w-0 pr-2">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
-                                              <span className="font-mono text-slate-300 truncate" title={prop.name}>
-                                                {prop.name}
-                                              </span>
-                                              <span className="text-slate-500">:</span>
-                                              <span className="font-mono text-cyan-300 font-semibold truncate" title={prop.value}>
-                                                {prop.value}
-                                              </span>
-                                            </div>
-                                            <button
-                                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 rounded transition-all shrink-0"
-                                              onClick={() => handleArtifactProperty(w.name, art.name, prop.name, '', 'remove')}
-                                              title={`Xóa thuộc tính '${prop.name}'`}
+                                      <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                                        {art.properties.map((prop, pIdx) => {
+                                          const propValues = prop.values && prop.values.length > 0
+                                            ? prop.values
+                                            : (prop.value ? prop.value.split(',').map(v => v.trim()).filter(Boolean) : []);
+                                          return (
+                                            <div
+                                              key={pIdx}
+                                              className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800/90 hover:border-slate-700 rounded-lg text-xs group transition-all"
                                             >
-                                              <Trash2 size={12} />
-                                            </button>
-                                          </div>
-                                        ))}
+                                              <div className="flex flex-wrap items-center gap-1.5 min-w-0 pr-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                                                <span className="font-mono text-slate-200 font-semibold truncate" title={prop.name}>
+                                                  {prop.name}
+                                                </span>
+                                                {propValues.length > 0 ? (
+                                                  <div className="flex flex-wrap items-center gap-1 font-mono">
+                                                    <span className="text-slate-500">(</span>
+                                                    {propValues.map((pv, pvIdx) => (
+                                                      <React.Fragment key={pvIdx}>
+                                                        <span className="px-1.5 py-0.2 bg-slate-950 border border-slate-700/80 rounded text-cyan-300 font-medium text-[11px]">
+                                                          {pv}
+                                                        </span>
+                                                        {pvIdx < propValues.length - 1 && <span className="text-slate-500">,</span>}
+                                                      </React.Fragment>
+                                                    ))}
+                                                    <span className="text-slate-500">)</span>
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-slate-500 italic text-[11px]">(không có giá trị)</span>
+                                                )}
+                                              </div>
+                                              <button
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 rounded transition-all shrink-0"
+                                                onClick={() => handleArtifactProperty(w.name, art.name, prop.name, '', 'remove')}
+                                                title={`Xóa thuộc tính '${prop.name}'`}
+                                              >
+                                                <Trash2 size={12} />
+                                              </button>
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     ) : (
                                       <span className="text-xs text-slate-500 italic block p-2 bg-slate-900/40 rounded border border-slate-900 text-center">

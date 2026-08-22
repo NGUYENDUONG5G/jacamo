@@ -464,8 +464,27 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                                                     sb.append("{");
                                                     sb.append("\"name\": \"").append(escapeJson(op.getName())).append("\",");
                                                     Object[] vals = op.getValues();
-                                                    String valStr = (vals != null && vals.length > 0) ? String.valueOf(vals[0]) : "";
-                                                    sb.append("\"value\": \"").append(escapeJson(valStr)).append("\"");
+                                                    String valStr = "";
+                                                    sb.append("\"values\": [");
+                                                    if (vals != null) {
+                                                        for (int vi = 0; vi < vals.length; vi++) {
+                                                            if (vi > 0) sb.append(",");
+                                                            sb.append("\"").append(escapeJson(String.valueOf(vals[vi]))).append("\"");
+                                                        }
+                                                        if (vals.length == 1) {
+                                                            valStr = String.valueOf(vals[0]);
+                                                        } else if (vals.length > 1) {
+                                                            StringBuilder vsb = new StringBuilder();
+                                                            for (int vi = 0; vi < vals.length; vi++) {
+                                                                if (vi > 0) vsb.append(", ");
+                                                                vsb.append(String.valueOf(vals[vi]));
+                                                            }
+                                                            valStr = vsb.toString();
+                                                        }
+                                                    }
+                                                    sb.append("],");
+                                                    sb.append("\"value\": \"").append(escapeJson(valStr)).append("\",");
+                                                    sb.append("\"arity\": ").append(vals != null ? vals.length : 0);
                                                     sb.append("}");
                                                 }
                                                 break;
@@ -674,6 +693,70 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
         return "{\"success\": true, \"message\": \"Operation processed\"}";
     }
 
+    private List<String> getJsonArrayField(String json, String fieldName) {
+        List<String> list = new ArrayList<>();
+        if (json == null) return list;
+        String pattern = "\"" + fieldName + "\"\\s*:\\s*\\[(.*?)\\]";
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.DOTALL).matcher(json);
+        if (m.find()) {
+            String content = m.group(1);
+            java.util.regex.Matcher itemM = java.util.regex.Pattern.compile("\"([^\"]*)\"|'([^']*)'|([^,\\s\\]]+)").matcher(content);
+            while (itemM.find()) {
+                if (itemM.group(1) != null) list.add(itemM.group(1));
+                else if (itemM.group(2) != null) list.add(itemM.group(2));
+                else if (itemM.group(3) != null) list.add(itemM.group(3));
+            }
+        }
+        return list;
+    }
+
+    private String[] splitTopLevelCommas(String text) {
+        if (text == null) return new String[0];
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        char quoteChar = 0;
+        int parenDepth = 0;
+        int bracketDepth = 0;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inQuotes) {
+                current.append(c);
+                if (c == quoteChar && (i == 0 || text.charAt(i - 1) != '\\')) {
+                    inQuotes = false;
+                }
+            } else {
+                if (c == '"' || c == '\'') {
+                    inQuotes = true;
+                    quoteChar = c;
+                    current.append(c);
+                } else if (c == '(') {
+                    parenDepth++;
+                    current.append(c);
+                } else if (c == ')') {
+                    parenDepth--;
+                    current.append(c);
+                } else if (c == '[') {
+                    bracketDepth++;
+                    current.append(c);
+                } else if (c == ']') {
+                    bracketDepth--;
+                    current.append(c);
+                } else if (c == ',' && parenDepth == 0 && bracketDepth == 0) {
+                    result.add(current.toString().trim());
+                    current.setLength(0);
+                } else {
+                    current.append(c);
+                }
+            }
+        }
+        if (current.length() > 0) {
+            result.add(current.toString().trim());
+        }
+        return result.toArray(new String[0]);
+    }
+
     private String handleArtifactProperty(String body) {
         String wspName = getJsonField(body, "workspace");
         String artName = getJsonField(body, "artifact");
@@ -687,8 +770,26 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
         }
 
         try {
+            // Parse multiple values
+            List<Object> parsedList = new ArrayList<>();
+            List<String> valuesArr = getJsonArrayField(body, "values");
+            if (!valuesArr.isEmpty()) {
+                for (String v : valuesArr) {
+                    if (v != null && !v.trim().isEmpty()) {
+                        parsedList.add(parsePropertyValue(v));
+                    }
+                }
+            } else if (propVal != null && !propVal.trim().isEmpty()) {
+                String[] parts = splitTopLevelCommas(propVal);
+                for (String p : parts) {
+                    if (!p.trim().isEmpty()) {
+                        parsedList.add(parsePropertyValue(p));
+                    }
+                }
+            }
+            Object[] parsedValues = parsedList.toArray(new Object[0]);
+
             // 1. Update Artifact in Cartago
-            Object parsedVal = parsePropertyValue(propVal);
             cartago.CartagoEnvironment cenv = cartago.CartagoEnvironment.getInstance();
             if (cenv != null) {
                 String[] candidates = { wspName, "/main/" + wspName, "/main/" + wspName.replace("/main/", "") };
@@ -699,7 +800,7 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                             cartago.WorkspaceDescriptor wd = cenv.resolveWSP(cWsp);
                             if (wd != null && wd.getWorkspace() != null) {
                                 cartago.Workspace w = wd.getWorkspace();
-                                updateCartagoArtifactProperty(w, artName, propName, parsedVal, action);
+                                updateCartagoArtifactProperty(w, artName, propName, parsedValues, action);
                             }
                         }
                     } catch (Exception ignored) {}
@@ -708,8 +809,24 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
 
             // 2. Also propagate belief into Jason agents focusing on this workspace/artifact
             String beliefStr;
-            if (propVal != null && !propVal.trim().isEmpty()) {
-                beliefStr = propName + "(" + propVal.trim() + ")";
+            if (parsedValues != null && parsedValues.length > 0) {
+                StringBuilder bsb = new StringBuilder(propName).append("(");
+                for (int i = 0; i < parsedValues.length; i++) {
+                    if (i > 0) bsb.append(", ");
+                    Object pv = parsedValues[i];
+                    if (pv instanceof String) {
+                        String strPv = (String) pv;
+                        if (strPv.matches("^[a-z][a-zA-Z0-9_]*$") || strPv.matches("^-?\\d+(\\.\\d+)?$")) {
+                            bsb.append(strPv);
+                        } else {
+                            bsb.append("\"").append(strPv.replace("\"", "\\\"")).append("\"");
+                        }
+                    } else {
+                        bsb.append(pv);
+                    }
+                }
+                bsb.append(")");
+                beliefStr = bsb.toString();
             } else {
                 beliefStr = propName;
             }
@@ -745,8 +862,8 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                 }
             }
 
-            logger.info("📦 [Artifact Belief] " + action + " property '" + propName + "' on artifact '" + artName + "' (Value: " + propVal + ")");
-            return "{\"success\": true, \"message\": \"Artifact property/belief updated: " + escapeJson(beliefStr) + "\", \"property\": \"" + escapeJson(propName) + "\", \"value\": \"" + escapeJson(propVal) + "\"}";
+            logger.info("📦 [Artifact Belief] " + action + " property '" + propName + "' on artifact '" + artName + "' (Values: " + java.util.Arrays.toString(parsedValues) + ")");
+            return "{\"success\": true, \"message\": \"Artifact property/belief updated: " + escapeJson(beliefStr) + "\", \"property\": \"" + escapeJson(propName) + "\", \"belief\": \"" + escapeJson(beliefStr) + "\"}";
         } catch (Exception e) {
             logger.warning("Error updating artifact property: " + e.getMessage());
             return "{\"success\": false, \"message\": \"" + escapeJson(e.getMessage()) + "\"}";
@@ -756,6 +873,10 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
     private Object parsePropertyValue(String val) {
         if (val == null || val.trim().isEmpty()) return "";
         String s = val.trim();
+        if ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'"))) {
+            if (s.length() >= 2) s = s.substring(1, s.length() - 1);
+            return s;
+        }
         if ("true".equalsIgnoreCase(s)) return Boolean.TRUE;
         if ("false".equalsIgnoreCase(s)) return Boolean.FALSE;
         try {
@@ -791,7 +912,7 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
         return null;
     }
 
-    private void updateCartagoArtifactProperty(cartago.Workspace w, String artName, String propName, Object parsedVal, String action) {
+    private void updateCartagoArtifactProperty(cartago.Workspace w, String artName, String propName, Object[] parsedValues, String action) {
         try {
             cartago.ArtifactId aid = w.getArtifact(artName);
             if (aid == null) return;
@@ -863,12 +984,22 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                         mRem.invoke(artObj, propName);
                     } else {
                         if (op != null) {
-                            ((cartago.ObsProperty) op).updateValue(parsedVal != null ? parsedVal : "");
+                            if (parsedValues != null && parsedValues.length > 0) {
+                                try {
+                                    java.lang.reflect.Method mUpd = cartago.ObsProperty.class.getDeclaredMethod("updateValues", Object[].class);
+                                    mUpd.setAccessible(true);
+                                    mUpd.invoke(op, new Object[]{ parsedValues });
+                                } catch (Exception ex) {
+                                    ((cartago.ObsProperty) op).updateValue(parsedValues[0]);
+                                }
+                            } else {
+                                ((cartago.ObsProperty) op).updateValue("");
+                            }
                         } else {
                             java.lang.reflect.Method mDef = cartago.Artifact.class.getDeclaredMethod("defineObsProperty", String.class, Object[].class);
                             mDef.setAccessible(true);
-                            if (parsedVal != null) {
-                                mDef.invoke(artObj, propName, new Object[]{ parsedVal });
+                            if (parsedValues != null && parsedValues.length > 0) {
+                                mDef.invoke(artObj, propName, parsedValues);
                             } else {
                                 mDef.invoke(artObj, propName, new Object[]{});
                             }
