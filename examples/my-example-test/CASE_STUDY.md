@@ -52,19 +52,43 @@ Hệ thống mô phỏng một dịch vụ giao hàng tự hành bao gồm:
 
 ---
 
-## 3. Cách chạy Case Study
+## 3. Cách chạy Case Study & Mô phỏng trên Web
 
-Từ thư mục gốc `e:\jacamo`:
-
+### Bước 1: Khởi động hệ thống JaCaMo MAS
+Di chuyển vào thư mục `examples/my-example-test` và chạy:
 ```bash
-# 1. Chạy biên dịch toàn bộ dự án
-.\gradlew.bat compileJava
-
-# 2. Chạy case study my-example-test qua Gradle application runner
-.\gradlew.bat :examples:my-example-test:run
+./gradlew run
+# hoặc: .\gradlew.bat run
 ```
 
-Hoặc chạy file cấu hình `.jcm`:
-```bash
-java -jar build/libs/jacamo-1.3.1-SNAPSHOT.jar examples/my-example-test/my-example.jcm
-```
+Hệ thống sẽ tự động khởi động:
+- CArtAgO Environment & MoISE Organisation.
+- 2 Agents: `dispatcher` và `delivery_truck` (ở trạng thái sẵn sàng).
+- **Web Simulation Studio / Goal Model Inspector** tại: **`http://localhost:3274`** (hoặc cổng hiển thị trên console).
+
+---
+
+### Bước 2: Điều khiển mô phỏng tương tác trên Web
+
+Mở trình duyệt truy cập: **`http://localhost:3274`** (hoặc tab **Simulation Studio**).
+
+1. **Chạy toàn bộ quy trình giao hàng (Happy Path)**:
+   - Trong mục **Inject Belief** của agent `delivery_truck`, nhập `start_delivery` và nhấn **Inject**.
+   - Robot sẽ thực hiện tuần tự qua 4 giai đoạn [G1] $\rightarrow$ [G2] $\rightarrow$ [G3] $\rightarrow$ [G4] với các bước delay trực quan và cập nhật trạng thái thời gian thực lên Observable Properties.
+
+2. **Chạy từng bước (Step-by-Step Interactive Mode)**:
+   - **Bước 1 (Lấy hàng)**: Inject belief `run_step(pickup)`
+   - **Bước 2 (Di chuyển)**: Inject belief `run_step(transit)`
+   - **Bước 3 (Bàn giao)**: Inject belief `run_step(handover)`
+   - **Bước 4 (Kết thúc)**: Inject belief `run_step(complete)`
+   - **Đặt lại ban đầu**: Inject belief `run_step(reset)`
+
+3. **Mô phỏng kích hoạt sự cố & Thích ứng (Failure Injection & Adaptation)**:
+   - Tại bảng **Failure Models / Errors** trên Web, bấm nút **⚡ Inject** tại bất kỳ lỗi nào (hoặc inject belief tương ứng):
+     * `path_blocked`: Tuyến đường bị chặn $\rightarrow$ Kích hoạt `reroute_new_path`.
+     * `gps_lost` hoặc `battery_critical`: Mất GPS / Cạn pin $\rightarrow$ Phanh khẩn cấp `emergency_rescue`.
+     * `wait_timeout` hoặc `auth_exceeded`: Khách không nhận $\rightarrow$ Khóa hàng chở về kho `return_to_warehouse`.
+     * `arm_disconnected`: Lỗi cánh tay robot $\rightarrow$ Hủy đơn và log WMS `cancel_and_log_wms`.
+     * `docks_occupied`: Hết trạm sạc $\rightarrow$ Vào chế độ ngủ sâu `standby_sleep_mode`.
+   - Xem dòng thời gian sự kiện (Timeline) và trạng thái Artifacts/Beliefs cập nhật tức thì.
+

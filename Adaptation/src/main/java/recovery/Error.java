@@ -11,6 +11,8 @@ public class Error<T> {
     private final String errorName;
     private final List<Condition<T>> conditions = new ArrayList<>();
     private final List<RecoveryActivity<T>> recoveryActivities = new ArrayList<>();
+    private boolean wasTriggered = false;
+    private long lastRecoveryTime = 0;
 
     public Error(String errorName) {
         this.errorName = errorName;
@@ -37,13 +39,28 @@ public class Error<T> {
     }
 
     public boolean isTriggered(T context) {
-        if (conditions.isEmpty()) return false;
+        if (conditions.isEmpty()) {
+            wasTriggered = false;
+            return false;
+        }
+        boolean active = true;
         for (Condition<T> cond : conditions) {
             if (!cond.evaluate(context)) {
-                return false;
+                active = false;
+                break;
             }
         }
-        return true;
+        if (!active) {
+            wasTriggered = false;
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        if (!wasTriggered || (now - lastRecoveryTime > 3000)) {
+            wasTriggered = true;
+            lastRecoveryTime = now;
+            return true;
+        }
+        return false;
     }
 
     public void performRecovery(T context) {

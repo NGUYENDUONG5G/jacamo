@@ -67,10 +67,12 @@ public class and_branches extends DefaultInternalAction {
         }
 
         if (!newSteps.isEmpty()) {
+            PlanBody next = currentStep.getBodyNext();
             for (int i = 0; i < newSteps.size() - 1; i++) {
                 newSteps.get(i).setBodyNext(newSteps.get(i + 1));
             }
-            im.insertAsNextStep(newSteps.get(0));
+            newSteps.get(newSteps.size() - 1).setBodyNext(next);
+            currentStep.setBodyNext(newSteps.get(0));
         }
 
         return true;

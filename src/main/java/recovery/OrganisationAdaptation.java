@@ -100,8 +100,12 @@ public class OrganisationAdaptation<T extends Agent> implements RecoveryActivity
                 op = new Op(operationName, opArgs.toArray());
             }
 
+            String agName = agent.getTS().getUserAgArch() != null ? agent.getTS().getUserAgArch().getAgName() : "recovery_agent";
+            cartago.ICartagoContext ctx = wsp.joinWorkspace(new cartago.AgentIdCredential(agName), new cartago.ICartagoCallback() {
+                public void notifyCartagoEvent(cartago.CartagoEvent arg0) {}
+            });
             agent.getTS().getLogger().info("[OrganisationAdaptation] Executing org action '" + operationName + "' on artifact '" + artifactName + "' with args " + opArgs);
-            cartagoArch.getSession().doAction(aid, op, null, -1);
+            ctx.doAction(1, aid.getName(), op, null, -1);
 
         } catch (Exception e) {
             agent.getTS().getLogger().log(Level.SEVERE, "[OrganisationAdaptation] Failed to execute organisation adaptation: " + orgDetails, e);

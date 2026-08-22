@@ -15,12 +15,37 @@ import {
   FileText,
   Sparkles,
   Check,
-  Filter
+  Filter,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
+  Flame,
+  ArrowRight,
+  Clock,
+  Search,
+  Users,
+  Target,
+  Sliders,
+  CornerDownRight,
+  Cpu,
+  Workflow
 } from 'lucide-react';
 import { AslBeliefExtractor, ExtractedBelief } from '../core/asl-belief-extractor';
 
+interface AgentIntention {
+  id: number;
+  isSuspended: boolean;
+  rootGoal: string;
+  currentGoal: string;
+  stack: string[];
+}
+
 interface AgentState {
   name: string;
+  currentGoal?: string | null;
+  intentions?: AgentIntention[];
+  events?: string[];
   beliefs: string[];
 }
 
@@ -51,6 +76,56 @@ interface AslFileItem {
   code: string;
 }
 
+// Failure Model Interfaces
+export interface RecoveryItem {
+  raw: string;
+  type: 'goal' | 'env' | 'org' | 'plan' | 'unknown';
+  action: string;
+}
+
+export interface FailureErrorItem {
+  errorName: string;
+  conditions: string[];
+  recoveryActivities: RecoveryItem[];
+}
+
+export interface AgentFailureItem {
+  goalId: string;
+  targetAgents: string[];
+  errors: FailureErrorItem[];
+}
+
+export interface OrgFailureItem {
+  scopeType: 'group' | 'scheme' | 'org';
+  scopeName: string;
+  orgName: string;
+  failureName: string;
+  errors: FailureErrorItem[];
+}
+
+export interface ActiveAgentItem {
+  name: string;
+  hasFailureManager: boolean;
+  monitoredFailuresCount: number;
+}
+
+export interface FailuresData {
+  agentFailures: AgentFailureItem[];
+  orgFailures: OrgFailureItem[];
+  activeAgents: ActiveAgentItem[];
+}
+
+export interface FailureEventItem {
+  timestamp: string;
+  type: string;
+  target: string;
+  failure: string;
+  error: string;
+  condition: string;
+  detail: string;
+  status: string;
+}
+
 interface SimulationPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -75,7 +150,14 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [newBelief, setNewBelief] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [activeTab, setActiveTab] = useState<'beliefs' | 'artifacts'>('beliefs');
+  const [activeTab, setActiveTab] = useState<'agents' | 'organisation' | 'artifacts'>('agents');
+
+  // Failure Models State
+  const [failuresData, setFailuresData] = useState<FailuresData>({ agentFailures: [], orgFailures: [], activeAgents: [] });
+  const [failureEvents, setFailureEvents] = useState<FailureEventItem[]>([]);
+  const [failureScopeFilter, setFailureScopeFilter] = useState<'all' | 'agent' | 'org'>('all');
+  const [failureSearch, setFailureSearch] = useState<string>('');
+  const [simulatingErrorKey, setSimulatingErrorKey] = useState<string | null>(null);
 
   // Import Dialog State & 2 Slots
   const [isImportDialogOpen, setIsImportDialogOpen] = useState<boolean>(false);
@@ -100,6 +182,34 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // Fetch failure models data
+  const fetchFailuresData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/simulation/failures');
+      if (res.ok) {
+        const data = await res.json();
+        setFailuresData(data);
+      }
+    } catch {
+      // Backend offline
+    }
+  }, []);
+
+  // Fetch failure events log
+  const fetchFailureEvents = useCallback(async () => {
+    try {
+      const res = await fetch('/api/simulation/failure-events');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.events)) {
+          setFailureEvents(data.events);
+        }
+      }
+    } catch {
+      // Backend offline
+    }
+  }, []);
 
   // Fetch simulation state
   const fetchSimulationState = useCallback(async () => {
@@ -160,16 +270,22 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
     }
   }, [selectedAgentName]);
 
+  const refreshAll = useCallback(() => {
+    fetchSimulationState();
+    fetchFailuresData();
+    fetchFailureEvents();
+  }, [fetchSimulationState, fetchFailuresData, fetchFailureEvents]);
+
   useEffect(() => {
     if (!isOpen) return;
-    fetchSimulationState();
+    refreshAll();
     fetchProjectFiles();
 
     if (autoRefresh) {
-      const timer = setInterval(fetchSimulationState, 1500);
+      const timer = setInterval(refreshAll, 1500);
       return () => clearInterval(timer);
     }
-  }, [isOpen, autoRefresh, fetchSimulationState, fetchProjectFiles]);
+  }, [isOpen, autoRefresh, refreshAll, fetchProjectFiles]);
 
   const currentAgent = state.agents.find(a => a.name === selectedAgentName) || state.agents[0];
 
@@ -280,6 +396,49 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
     }
   };
 
+  // Simulate Failure or Trigger Recovery
+  const handleSimulateFailure = async (
+    targetAgent: string,
+    goalId: string,
+    errorName: string,
+    condition: string,
+    mode: 'inject_condition' | 'trigger_recovery'
+  ) => {
+    const errorKey = `${targetAgent}_${goalId}_${errorName}_${condition}_${mode}`;
+    try {
+      setSimulatingErrorKey(errorKey);
+      setLoading(true);
+      const res = await fetch('/api/simulation/inject-failure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent: targetAgent,
+          failure: goalId,
+          error: errorName,
+          condition,
+          mode
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          mode === 'inject_condition'
+            ? `⚡ Đã giả lập lỗi '${condition}' trên Agent ${targetAgent} (Triggered Failure Monitor)`
+            : `🛡️ Đã kích hoạt phục hồi thích ứng cho ${goalId} -> ${errorName}`,
+          'success'
+        );
+        await refreshAll();
+      } else {
+        showToast(data.message || 'Lỗi giả lập Failure Model', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Lỗi kết nối server', 'error');
+    } finally {
+      setSimulatingErrorKey(null);
+      setLoading(false);
+    }
+  };
+
   const isBeliefActive = (literal: string) => {
     if (!currentAgent || !currentAgent.beliefs) return false;
     const clean = literal.trim();
@@ -289,6 +448,37 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
   const filteredExtractedBeliefs = extractedBeliefs.filter(b => {
     if (categoryFilter === 'all') return true;
     return b.category === categoryFilter;
+  });
+
+  // Filtered Failures
+  const totalErrorRulesCount = (failuresData.agentFailures || []).reduce((acc, f) => acc + (f.errors?.length || 0), 0) +
+    (failuresData.orgFailures || []).reduce((acc, f) => acc + (f.errors?.length || 0), 0);
+
+  const filteredAgentFailures = (failuresData.agentFailures || []).filter(f => {
+    if (failureScopeFilter === 'org') return false;
+    if (!failureSearch.trim()) return true;
+    const q = failureSearch.toLowerCase();
+    const matchGoal = f.goalId.toLowerCase().includes(q);
+    const matchAgents = f.targetAgents.some(a => a.toLowerCase().includes(q));
+    const matchErrors = f.errors.some(e =>
+      e.errorName.toLowerCase().includes(q) ||
+      e.conditions.some(c => c.toLowerCase().includes(q)) ||
+      e.recoveryActivities.some(r => r.raw.toLowerCase().includes(q))
+    );
+    return matchGoal || matchAgents || matchErrors;
+  });
+
+  const filteredOrgFailures = (failuresData.orgFailures || []).filter(f => {
+    if (failureScopeFilter === 'agent') return false;
+    if (!failureSearch.trim()) return true;
+    const q = failureSearch.toLowerCase();
+    const matchName = f.failureName.toLowerCase().includes(q) || f.scopeName.toLowerCase().includes(q);
+    const matchErrors = f.errors.some(e =>
+      e.errorName.toLowerCase().includes(q) ||
+      e.conditions.some(c => c.toLowerCase().includes(q)) ||
+      e.recoveryActivities.some(r => r.raw.toLowerCase().includes(q))
+    );
+    return matchName || matchErrors;
   });
 
   if (!isOpen) return null;
@@ -301,8 +491,8 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
           <div className="sim-header-title">
             <Activity className="text-cyan-400" size={20} />
             <div>
-              <h3>Agent & Artifact Simulator</h3>
-              <p>Mô phỏng runtime, tương tác Observable Properties & Belief Base</p>
+              <h3>Agent & Resilience Simulation Studio</h3>
+              <p>Mô phỏng runtime, Failure Models, Thích ứng phục hồi & Observable Properties</p>
             </div>
           </div>
           <div className="sim-header-actions">
@@ -316,7 +506,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
             </button>
             <button
               className="sim-icon-btn"
-              onClick={fetchSimulationState}
+              onClick={refreshAll}
               disabled={loading}
               title="Làm mới dữ liệu"
             >
@@ -339,23 +529,30 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
         {/* Tabs */}
         <div className="sim-tabs">
           <button
-            className={`sim-tab ${activeTab === 'beliefs' ? 'active' : ''}`}
-            onClick={() => setActiveTab('beliefs')}
+            className={`sim-tab ${activeTab === 'agents' ? 'active' : ''}`}
+            onClick={() => setActiveTab('agents')}
           >
             <Zap size={14} />
-            <span>Belief Base ({currentAgent ? currentAgent.beliefs.length : 0})</span>
+            <span>🤖 Agents ({state.agents.length})</span>
+          </button>
+          <button
+            className={`sim-tab ${activeTab === 'organisation' ? 'active' : ''}`}
+            onClick={() => setActiveTab('organisation')}
+          >
+            <Users size={14} />
+            <span>🏢 Organisation</span>
           </button>
           <button
             className={`sim-tab ${activeTab === 'artifacts' ? 'active' : ''}`}
             onClick={() => setActiveTab('artifacts')}
           >
             <Boxes size={14} />
-            <span>Artifacts ({state.workspaces.reduce((acc, w) => acc + w.artifacts.length, 0)})</span>
+            <span>📦 Artifacts ({state.workspaces.reduce((acc, w) => acc + w.artifacts.length, 0)})</span>
           </button>
         </div>
 
-        {/* Tab 1: Live Beliefs Management */}
-        {activeTab === 'beliefs' && (
+        {/* Tab 1: Live Agents Management */}
+        {activeTab === 'agents' && (
           <div className="sim-tab-content">
             {/* Agent Select Bar & Open Import Dialog Button */}
             <div className="sim-toolbar-row">
@@ -406,6 +603,37 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Current Active Goal Banner */}
+            <div className="p-3 bg-slate-900 border border-slate-700/80 rounded-lg mb-3 shadow">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                  <Workflow size={13} className="text-emerald-400" /> Mục tiêu hiện tại (Current Goal):
+                </span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                  currentAgent?.currentGoal || (currentAgent?.intentions && currentAgent.intentions.length > 0)
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/60'
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {currentAgent?.currentGoal || (currentAgent?.intentions && currentAgent.intentions.length > 0) ? '⚡ RUNNING' : '💤 IDLE'}
+                </span>
+              </div>
+              <div className="font-mono text-xs text-emerald-300 font-semibold truncate">
+                {currentAgent?.currentGoal || (currentAgent?.intentions && currentAgent.intentions.length > 0 ? currentAgent.intentions[0].currentGoal : 'Không có mục tiêu nào đang chạy')}
+              </div>
+              {currentAgent?.intentions && currentAgent.intentions.length > 0 && currentAgent.intentions[0].stack && (
+                <div className="flex flex-wrap items-center gap-1 mt-2 text-[10px] font-mono text-slate-400">
+                  {currentAgent.intentions[0].stack.map((step, sIdx) => (
+                    <React.Fragment key={sIdx}>
+                      <span className="px-1.5 py-0.5 bg-slate-950 border border-slate-800 rounded text-cyan-300">
+                        {step}
+                      </span>
+                      {sIdx < currentAgent.intentions![0].stack.length - 1 && <ArrowRight size={10} className="text-slate-600" />}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Custom Belief Input Form */}
             <div className="sim-inject-form">
@@ -536,7 +764,58 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Artifacts & Observable Properties */}
+        {/* Tab 2: Organisation State & Structure */}
+        {activeTab === 'organisation' && (
+          <div className="sim-tab-content">
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-lg">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-amber-950 border border-amber-600/60 text-amber-300 text-[10px] font-bold rounded">
+                      ORGANISATION
+                    </span>
+                    <strong className="text-sm font-bold text-slate-100 font-mono">o1</strong>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">src/org/my-org.xml</span>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-xs text-slate-400 font-semibold block mb-1.5 uppercase">
+                      Nhóm: <code>my_team</code> (Type: <code>team</code>)
+                    </span>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded text-xs">
+                        <span className="font-mono text-cyan-300">🤖 dispatcher</span>
+                        <span className="px-2 py-0.5 bg-blue-950 border border-blue-600/60 text-blue-300 rounded font-mono text-[11px]">
+                          vai trò: dispatcher
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded text-xs">
+                        <span className="font-mono text-cyan-300">🤖 delivery_truck</span>
+                        <span className="px-2 py-0.5 bg-emerald-950 border border-emerald-600/60 text-emerald-300 rounded font-mono text-[11px]">
+                          vai trò: delivery_robot
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800">
+                    <span className="text-xs text-slate-400 font-semibold block mb-1.5 uppercase">
+                      Đồ hình Kế hoạch (Scheme):
+                    </span>
+                    <div className="p-2 bg-slate-900 border border-slate-800 rounded text-xs flex items-center justify-between">
+                      <span className="font-mono text-emerald-300">Scheme s1 (delivery_scheme)</span>
+                      <span className="text-[11px] text-slate-400">my_team chịu trách nhiệm</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Artifacts & Observable Properties */}
         {activeTab === 'artifacts' && (
           <div className="sim-tab-content">
             <div className="sim-artifacts-container">

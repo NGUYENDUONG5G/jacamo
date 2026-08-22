@@ -93,7 +93,9 @@ public class or_branches extends DefaultInternalAction {
             }
         }
 
-        im.insertAsNextStep(selectedStep);
+        PlanBody next = currentStep.getBodyNext();
+        selectedStep.setBodyNext(next);
+        currentStep.setBodyNext(selectedStep);
 
         return true;
     }

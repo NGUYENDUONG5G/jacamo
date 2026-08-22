@@ -48,7 +48,8 @@
     </functional-specification>
 
     <normative-specification>
-        <norm id="n1" type="obligation" role="delivery_robot" mission="delivery_mission" />
+        <!-- Tạm tắt obligation tự động để tác tử ở trạng thái chờ kích hoạt / inject belief từ Web -->
+        <!-- <norm id="n1" type="obligation" role="delivery_robot" mission="delivery_mission" /> -->
     </normative-specification>
 
 </organisational-specification>

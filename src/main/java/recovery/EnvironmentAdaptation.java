@@ -1,8 +1,14 @@
 package recovery;
 
 import jason.asSemantics.Agent;
-import jaca.CAgentArch;
 import cartago.ArtifactId;
+import cartago.Op;
+import cartago.CartagoEnvironment;
+import cartago.Workspace;
+import cartago.ICartagoContext;
+import cartago.AgentIdCredential;
+import cartago.ICartagoCallback;
+import cartago.CartagoEvent;
 import java.util.logging.Level;
 
 public class EnvironmentAdaptation<T extends Agent> implements RecoveryActivity<T> {
@@ -31,28 +37,40 @@ public class EnvironmentAdaptation<T extends Agent> implements RecoveryActivity<
     @Override
     public void execute(T agent) {
         try {
-            jason.architecture.AgArch arch = agent.getTS().getAgArch().getFirstAgArch();
-            CAgentArch cartagoArch = null;
-            while (arch != null) {
-                if (arch instanceof CAgentArch) {
-                    cartagoArch = (CAgentArch) arch;
-                    break;
-                }
-                arch = arch.getNextAgArch();
+            CartagoEnvironment cenv = CartagoEnvironment.getInstance();
+            if (cenv == null || cenv.getRootWSP() == null) {
+                agent.getTS().getLogger().warning("[EnvironmentAdaptation] Cartago Environment not initialized.");
+                return;
             }
-            if (cartagoArch != null) {
-                cartago.CartagoEnvironment cenv = cartago.CartagoEnvironment.getInstance();
-                cartago.Workspace wsp = cenv.getRootWSP().getWorkspace();
-                if (workspaceName != null && !workspaceName.isEmpty() && !workspaceName.equals("default")) {
-                    var childOpt = wsp.getChildWSP(workspaceName);
-                    if (childOpt.isPresent()) {
-                        wsp = childOpt.get().getWorkspace();
+
+            Workspace rootWsp = cenv.getRootWSP().getWorkspace();
+            Workspace wsp = rootWsp;
+            if (workspaceName != null && !workspaceName.isEmpty() && !workspaceName.equals("default")) {
+                var childOpt = rootWsp.getChildWSP(workspaceName);
+                if (childOpt.isPresent()) {
+                    wsp = childOpt.get().getWorkspace();
+                }
+            }
+
+            ArtifactId aid = wsp.getArtifact(artifactName);
+            if (aid == null) {
+                for (var child : rootWsp.getChildWSPs()) {
+                    if (child.getWorkspace().getArtifact(artifactName) != null) {
+                        wsp = child.getWorkspace();
+                        aid = wsp.getArtifact(artifactName);
+                        break;
                     }
                 }
-                ArtifactId aid = wsp.getArtifact(artifactName);
-                if (aid != null) {
-                    cartagoArch.getSession().doAction(aid, new cartago.Op(operationName), null, -1);
-                }
+            }
+
+            if (aid != null) {
+                String agName = agent.getTS().getUserAgArch() != null ? agent.getTS().getUserAgArch().getAgName() : "recovery_agent";
+                ICartagoContext ctx = wsp.joinWorkspace(new AgentIdCredential(agName), new ICartagoCallback() {
+                    public void notifyCartagoEvent(CartagoEvent arg0) {}
+                });
+                ctx.doAction(1, aid.getName(), new Op(operationName), null, -1);
+            } else {
+                agent.getTS().getLogger().warning("[EnvironmentAdaptation] Artifact '" + artifactName + "' not found.");
             }
         } catch (Exception e) {
             agent.getTS().getLogger().log(Level.SEVERE, "Failed to execute environment adaptation", e);

@@ -16,7 +16,7 @@ import { GoalNodeComponent } from './components/nodes/GoalNodeComponent';
 import { InternalActionNodeComponent } from './components/nodes/InternalActionNodeComponent';
 import { AslEditor } from './components/AslEditor';
 import { Inspector } from './components/Inspector';
-import { SimulationPanel } from './components/SimulationPanel';
+import { SimulationStudioPage } from './components/SimulationStudioPage';
 import { ImportAslModal, AslFileItem } from './components/ImportAslModal';
 import {
   GitFork,
@@ -26,10 +26,21 @@ import {
   FileCode,
   LayoutGrid,
   CheckCircle2,
-  Activity
+  Bot
 } from 'lucide-react';
 
+const getInitialRoute = (): 'editor' | 'simulation' => {
+  const path = (typeof window !== 'undefined' ? window.location.pathname : '').toLowerCase();
+  const hash = (typeof window !== 'undefined' ? window.location.hash : '').toLowerCase();
+  if (path.includes('simulation') || path.includes('studio') || hash.includes('simulation') || hash.includes('studio')) {
+    return 'simulation';
+  }
+  return 'editor';
+};
+
 export const App: React.FC = () => {
+  const [currentRoute, setCurrentRoute] = React.useState<'editor' | 'simulation'>(getInitialRoute);
+
   const {
     code,
     graph,
@@ -51,11 +62,34 @@ export const App: React.FC = () => {
   const [importNotice, setImportNotice] = React.useState<string | null>(null);
   const [projectAgents, setProjectAgents] = React.useState<AgentInfo[]>([]);
   const [selectedAgentName, setSelectedAgentName] = React.useState<string>('');
-  const [isSimulationOpen, setIsSimulationOpen] = React.useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = React.useState<boolean>(false);
 
   const [agentFile, setAgentFile] = React.useState<AslFileItem | null>(null);
   const [beliefFile, setBeliefFile] = React.useState<AslFileItem | null>(null);
+
+  // Sync route with browser history & URL
+  React.useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentRoute(getInitialRoute());
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  const navigateTo = (newRoute: 'editor' | 'simulation') => {
+    setCurrentRoute(newRoute);
+    const targetPath = newRoute === 'simulation' ? '/simulation' : '/';
+    const targetHash = newRoute === 'simulation' ? '#/simulation' : '#/editor';
+    try {
+      window.history.pushState({ route: newRoute }, '', targetPath);
+    } catch {
+      window.location.hash = targetHash;
+    }
+  };
 
   const nodeTypes: NodeTypes = useMemo(() => ({
     goalNode: GoalNodeComponent,
@@ -140,7 +174,7 @@ export const App: React.FC = () => {
           if (firstWithCode) {
             setSelectedAgentName(firstWithCode.name);
             setCode(firstWithCode.aslCode);
-            setImportNotice(`Đã tải AgentSpeak: ${firstWithCode.name}`);
+            setImportNotice(`Đã tải  : ${firstWithCode.name}`);
             setTimeout(() => setImportNotice(null), 3500);
           }
         }
@@ -224,14 +258,36 @@ export const App: React.FC = () => {
       {/* Top Header Navbar */}
       <header className="app-header">
         <div className="header-brand">
-          <div className="brand-icon">
+          <div className="brand-icon" onClick={() => navigateTo('editor')} style={{ cursor: 'pointer' }}>
             <GitFork size={20} className="text-cyan-400" />
           </div>
           <div>
-            <h1 className="brand-title">AgentSpeak Goal Tree Studio</h1>
-            <p className="brand-subtitle">Bi-directional Visual Goal Tree Editor & Compiler (Port 3274)</p>
+            <h1 className="brand-title">JaCaMo Goal Tree Studio</h1>
+            <p className="brand-subtitle">Visual Goal Hierarchy Compiler & Resilience Simulation (Port 3274)</p>
           </div>
         </div>
+
+        {/* Center Route Navigation Tabs */}
+        <nav className="header-nav-tabs">
+          <button
+            className={`nav-tab-btn ${currentRoute === 'editor' ? 'active' : ''}`}
+            onClick={() => navigateTo('editor')}
+            title="Mở giao diện Visual Goal Tree Editor (Mã nguồn & Đồ hình)"
+          >
+            <LayoutGrid size={15} />
+            <span>Goal Tree Editor</span>
+          </button>
+
+          <button
+            className={`nav-tab-btn ${currentRoute === 'simulation' ? 'active' : ''}`}
+            onClick={() => navigateTo('simulation')}
+            title="Mở Simulation Studio (Toàn màn hình)"
+          >
+            <Bot size={15} className="text-cyan-400" />
+            <span>Simulation Studio</span>
+            <span className="nav-live-dot" title="Live Runtime Connected" />
+          </button>
+        </nav>
 
         {importNotice && (
           <div className="import-success-toast">
@@ -241,7 +297,7 @@ export const App: React.FC = () => {
         )}
 
         <div className="header-actions">
-          {projectAgents.length > 0 && (
+          {projectAgents.length > 0 && currentRoute === 'editor' && (
             <div className="sample-selector-group agent-selector-group">
               <span className="text-xs text-cyan-400 font-semibold">🤖 Agent:</span>
               <select
@@ -258,125 +314,151 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          <button
-            className={`header-btn simulation-btn ${isSimulationOpen ? 'active' : ''}`}
-            onClick={() => setIsSimulationOpen(!isSimulationOpen)}
-            title="Mở Bảng điều khiển Mô phỏng & Nạp Belief"
-          >
-            <Activity size={14} className="text-cyan-400" />
-            <span>Mô phỏng & Beliefs</span>
-          </button>
+          {currentRoute === 'editor' && (
+            <>
+              <button className="header-btn import-btn" onClick={handleImportClick} title="Import file .asl từ máy tính">
+                <Upload size={14} /> Import .asl
+              </button>
 
-          <button className="header-btn import-btn" onClick={handleImportClick} title="Import file .asl từ máy tính">
-            <Upload size={14} /> Import .asl
-          </button>
+              <button className="header-btn export-btn" onClick={handleExportAsl} title="Tải về file .asl">
+                <Download size={14} /> Export .asl
+              </button>
+            </>
+          )}
 
-          <button className="header-btn export-btn" onClick={handleExportAsl} title="Tải về file .asl">
-            <Download size={14} /> Export .asl
-          </button>
+          {currentRoute === 'simulation' && (
+            <button
+              className="header-btn import-btn"
+              onClick={handleImportClick}
+              title="Nạp file Agent / Beliefs ASL"
+            >
+              <Upload size={14} /> Nạp ASL Files
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Main Split Screen Area */}
-      <main className={`split-workspace ${isResizing ? 'is-resizing' : ''}`}>
-        {/* Left Pane: Code Editor */}
-        <section className="editor-pane" style={{ width: `${editorWidth}px`, flex: 'none' }}>
-          <div className="pane-header">
-            <div className="pane-title">
-              <FileCode size={15} className="text-blue-400" />
-              <span>AgentSpeak Source Code (.asl)</span>
-            </div>
-            <span className="live-sync-indicator">
-              <Zap size={12} className="text-amber-400 fill-amber-400" /> Live Round-trip
-            </span>
-          </div>
-
-          {error && (
-            <div className="error-banner">
-              <strong>Compiler Warning:</strong> {error}
-            </div>
-          )}
-
-          <div className="editor-container">
-            <AslEditor value={code} onChange={setCode} />
-          </div>
-        </section>
-
-        {/* Draggable Splitter Divider (VS Code style) */}
-        <div
-          className={`split-resizer ${isResizing ? 'active' : ''}`}
-          onMouseDown={handleStartResizing}
-          onDoubleClick={handleResetWidth}
-          title="Kéo sang trái/phải để đổi kích thước (Click đúp để reset)"
-        >
-          <div className="resizer-handle-line" />
-        </div>
-
-        {/* Right Pane: React Flow Visual Canvas */}
-        <section className="canvas-pane">
-          <div className="pane-header">
-            <div className="pane-title">
-              <LayoutGrid size={15} className="text-cyan-400" />
-              <span>Hierarchical Goal-Action Tree</span>
-            </div>
-            <div className="legend-items">
-              <span className="legend-badge goal-legend">Goal (AND/OR)</span>
-              <span className="legend-badge action-legend">Internal Action</span>
-              <span className="legend-badge recursive-legend">Recursive</span>
-            </div>
-          </div>
-
-          <div className="flow-canvas-wrapper">
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeClick={handleNodeClick}
-              onPaneClick={handlePaneClick}
-              nodeTypes={nodeTypes}
-              fitView
-              minZoom={0.2}
-              maxZoom={1.8}
-            >
-              <Background color="#cbd5e1" gap={20} size={1} />
-              <Controls className="react-flow-controls" />
-              <MiniMap
-                nodeColor={(node: any) =>
-                  node.data.type === 'goal' ? '#3b82f6' : '#8b5cf6'
-                }
-                maskColor="rgba(241, 245, 249, 0.7)"
-                className="react-flow-minimap"
-              />
-
-              <Panel position="top-left" className="stats-panel">
-                <div className="stat-pill">
-                  <span className="stat-label">Goals:</span>
-                  <span className="stat-value">
-                    {nodes.filter((n: any) => n.data.type === 'goal').length}
-                  </span>
-                </div>
-                <div className="stat-pill">
-                  <span className="stat-label">Internal Actions:</span>
-                  <span className="stat-value">
-                    {nodes.filter((n: any) => n.data.type === 'action').length}
-                  </span>
-                </div>
-              </Panel>
-            </ReactFlow>
-          </div>
-        </section>
-
-        {/* Rightmost Slide-in Properties Inspector */}
-        <aside className="inspector-sidebar">
-          <Inspector
-            selectedNodeData={selectedNodeData}
-            onUpdatePlanContext={updatePlanContext}
-            onAddSubGoal={addSubGoalToPlan}
-            onDeletePlanStep={deletePlanStep}
+      {/* Conditional Route Views */}
+      {currentRoute === 'simulation' ? (
+        <main className="studio-route-wrapper">
+          <SimulationStudioPage
+            selectedAgentName={selectedAgentName}
+            onSelectAgent={(name) => {
+              setSelectedAgentName(name);
+              const ag = projectAgents.find(a => a.name === name);
+              if (ag && ag.aslCode) setCode(ag.aslCode);
+            }}
+            importedAgentFile={agentFile}
+            importedBeliefFile={beliefFile}
+            onOpenImportModal={() => setIsImportModalOpen(true)}
+            onNavigateToEditor={(agName) => {
+              if (agName) handleAgentChange(agName);
+              navigateTo('editor');
+            }}
           />
-        </aside>
-      </main>
+        </main>
+      ) : (
+        /* Main Split Screen Area for Editor */
+        <main className={`split-workspace ${isResizing ? 'is-resizing' : ''}`}>
+          {/* Left Pane: Code Editor */}
+          <section className="editor-pane" style={{ width: `${editorWidth}px`, flex: 'none' }}>
+            <div className="pane-header">
+              <div className="pane-title">
+                <FileCode size={15} className="text-blue-400" />
+                <span>  Source Code (.asl)</span>
+              </div>
+              <span className="live-sync-indicator">
+                <Zap size={12} className="text-amber-400 fill-amber-400" /> Live Round-trip
+              </span>
+            </div>
+
+            {error && (
+              <div className="error-banner">
+                <strong>Compiler Warning:</strong> {error}
+              </div>
+            )}
+
+            <div className="editor-container">
+              <AslEditor value={code} onChange={setCode} />
+            </div>
+          </section>
+
+          {/* Draggable Splitter Divider (VS Code style) */}
+          <div
+            className={`split-resizer ${isResizing ? 'active' : ''}`}
+            onMouseDown={handleStartResizing}
+            onDoubleClick={handleResetWidth}
+            title="Kéo sang trái/phải để đổi kích thước (Click đúp để reset)"
+          >
+            <div className="resizer-handle-line" />
+          </div>
+
+          {/* Right Pane: React Flow Visual Canvas */}
+          <section className="canvas-pane">
+            <div className="pane-header">
+              <div className="pane-title">
+                <LayoutGrid size={15} className="text-cyan-400" />
+                <span>Hierarchical Goal-Action Tree</span>
+              </div>
+              <div className="legend-items">
+                <span className="legend-badge goal-legend">Goal (AND/OR)</span>
+                <span className="legend-badge action-legend">Internal Action</span>
+                <span className="legend-badge recursive-legend">Recursive</span>
+              </div>
+            </div>
+
+            <div className="flow-canvas-wrapper">
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={handleNodeClick}
+                onPaneClick={handlePaneClick}
+                nodeTypes={nodeTypes}
+                fitView
+                minZoom={0.2}
+                maxZoom={1.8}
+              >
+                <Background color="#cbd5e1" gap={20} size={1} />
+                <Controls className="react-flow-controls" />
+                <MiniMap
+                  nodeColor={(node: any) =>
+                    node.data.type === 'goal' ? '#3b82f6' : '#8b5cf6'
+                  }
+                  maskColor="rgba(241, 245, 249, 0.7)"
+                  className="react-flow-minimap"
+                />
+
+                <Panel position="top-left" className="stats-panel">
+                  <div className="stat-pill">
+                    <span className="stat-label">Goals:</span>
+                    <span className="stat-value">
+                      {nodes.filter((n: any) => n.data.type === 'goal').length}
+                    </span>
+                  </div>
+                  <div className="stat-pill">
+                    <span className="stat-label">Internal Actions:</span>
+                    <span className="stat-value">
+                      {nodes.filter((n: any) => n.data.type === 'action').length}
+                    </span>
+                  </div>
+                </Panel>
+              </ReactFlow>
+            </div>
+          </section>
+
+          {/* Rightmost Slide-in Properties Inspector */}
+          <aside className="inspector-sidebar">
+            <Inspector
+              selectedNodeData={selectedNodeData}
+              onUpdatePlanContext={updatePlanContext}
+              onAddSubGoal={addSubGoalToPlan}
+              onDeletePlanStep={deletePlanStep}
+            />
+          </aside>
+        </main>
+      )}
 
       {/* 2-Slot Import Modal Dialog */}
       <ImportAslModal
@@ -385,17 +467,6 @@ export const App: React.FC = () => {
         initialAgentFile={agentFile}
         initialBeliefFile={beliefFile}
         onApply={handleApplyFiles}
-      />
-
-      {/* Slide-over Simulation Panel */}
-      <SimulationPanel
-        isOpen={isSimulationOpen}
-        onClose={() => setIsSimulationOpen(false)}
-        selectedAgentName={selectedAgentName}
-        onSelectAgent={(name) => setSelectedAgentName(name)}
-        importedAgentFile={agentFile}
-        importedBeliefFile={beliefFile}
-        onOpenImportModal={() => setIsImportModalOpen(true)}
       />
     </div>
   );
