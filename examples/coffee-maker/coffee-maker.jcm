@@ -1,0 +1,116 @@
+mas coffee_maker_mas {
+
+    // ========================================================================
+    // 1. TÁC TỬ (AGENTS)
+    // ========================================================================
+    
+    // Tác tử Máy pha cà phê (Coffee Maker)
+    agent coffee_maker : coffee_maker/coffee_maker.asl {
+        join: w1
+        focus: w1.coffee_system
+        focus: w1.water_system
+        failure: place_cup_failure, grind_beans_failure, brew_coffee_failure
+    }
+
+    // Tác tử Máy đun nước nóng thông minh (Water Boiler)
+    agent water_boiler : water_boiler/water_boiler.asl {
+        join: w1
+        focus: w1.water_system
+        failure: water_boiler_coordination
+    }
+
+    // ========================================================================
+    // 2. MÔI TRƯỜNG & KHÔNG GIAN LÀM VIỆC (WORKSPACE)
+    // ========================================================================
+    workspace w1 {
+        artifact coffee_system : tools.CoffeeMachineArtifact(11)
+        artifact water_system  : tools.WaterBoilerArtifact(1000, 25)
+    }
+
+    // ========================================================================
+    // 3. TỔ CHỨC MOISE (ORGANISATION)
+    // ========================================================================
+    organisation o1 : src/org/coffee-org.xml {
+        group my_coffee_team : coffee_team {
+            responsible-for: s1
+            players: coffee_maker coffee_maker_role
+                     water_boiler water_boiler_role
+            failure: boiler_coordination
+        }
+
+        scheme s1 : coffee_scheme {
+            failure: coffee_scheme_execution
+        }
+    }
+
+    // ========================================================================
+    // 4. ĐẶC TẢ FAILURE MODEL CHO TỔ CHỨC
+    // ========================================================================
+    failure boiler_coordination {
+        error missing_boiler {
+            conditions: "cardinality(water_boiler_role) < 1"
+            recovery-activities: "goal:reconnect_boiler_recovery"
+        }
+    }
+
+    failure coffee_scheme_execution {
+        error scheme_timeout {
+            conditions: coffee_scheme_deadlock
+            recovery-activities: "goal:reset_simulation"
+        }
+    }
+
+    // ========================================================================
+    // 5. ĐẶC TẢ FAILURE MODEL CHO TÁC TỬ & MÔI TRƯỜNG
+    // ========================================================================
+
+    // Giám sát sự cố Máy đun nước
+    failure water_boiler_coordination {
+        error empty_water_tank {
+            conditions: water_tank_empty
+            recovery-activities: "goal:refill_water_recovery", 
+                                "env:w1.water_system.refill_water(1000)"
+        }
+        error overheat_danger {
+            conditions: overheat_alert
+            recovery-activities: "goal:emergency_cooldown_recovery", 
+                                "env:w1.water_system.emergency_cooldown"
+        }
+        error temperature_sensor_fault {
+            conditions: sensor_error
+            recovery-activities: "goal:recalibrate_sensor_recovery", 
+                                "env:w1.water_system.recalibrate_sensor"
+        }
+    }
+
+    // [G1] Sự cố chuẩn bị máy & ly đựng
+    failure place_cup_failure {
+        error missing_cup {
+            conditions: cup_missing
+            recovery-activities: "goal:place_cup_recovery", 
+                                "env:w1.coffee_system.place_cup"
+        }
+        error full_waste_bin {
+            conditions: waste_bin_full
+            recovery-activities: "goal:empty_waste_recovery", 
+                                "env:w1.coffee_system.empty_waste_tray"
+        }
+    }
+
+    // [G2] Sự cố xay hạt cà phê
+    failure grind_beans_failure {
+        error no_beans {
+            conditions: beans_depleted
+            recovery-activities: "goal:refill_beans_recovery", 
+                                "env:w1.coffee_system.refill_beans(200)"
+        }
+    }
+
+    // [G3] Sự cố chiết xuất áp suất
+    failure brew_coffee_failure {
+        error low_pressure {
+            conditions: pump_pressure_low
+            recovery-activities: "goal:recalibrate_pressure_recovery"
+        }
+    }
+}

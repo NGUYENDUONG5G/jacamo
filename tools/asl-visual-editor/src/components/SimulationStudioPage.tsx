@@ -1010,14 +1010,6 @@ export const SimulationStudioPage: React.FC<SimulationStudioPageProps> = ({
                                         <Sparkles size={13} className="text-amber-400 shrink-0" />
                                         Tạo Belief từ Môi trường (Observable Property):
                                       </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => addPropValueField(art.name)}
-                                        className="text-[11px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded flex items-center gap-1 font-medium transition-all cursor-pointer"
-                                        title="Thêm một ô trường giá trị (Value field)"
-                                      >
-                                        <Plus size={11} /> + Thêm giá trị
-                                      </button>
                                     </div>
 
                                     <div className="space-y-2.5">

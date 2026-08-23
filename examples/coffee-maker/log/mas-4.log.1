@@ -1,0 +1,126 @@
+[FailureModel] Initializing FailureModel platform...
+[OrgFailureModelManager] [OrgFailureManager] Registered 7 failure(s) for Organisation: o1
+[OrgFailureModelManager] [OrgFailureManager] Registered 1 failure(s) for Group: my_coffee_team
+[OrgFailureModelManager] [OrgFailureManager] Registered 1 failure(s) for Scheme: s1
+[coffee_maker] [FailureModelManager] Registered failure monitoring for goal: prepare_machine on agent: coffee_maker
+[coffee_maker] [FailureModelManager] Registered failure monitoring for goal: grind_beans_step on agent: coffee_maker
+[coffee_maker] [FailureModelManager] Registered failure monitoring for goal: request_hot_water_step on agent: coffee_maker
+[coffee_maker] [FailureModelManager] Registered failure monitoring for goal: extract_and_blend_step on agent: coffee_maker
+[water_boiler] [FailureModelManager] Registered failure monitoring for goal: water_boiler_coordination on agent: water_boiler
+[Moise] OrgBoard o1 created.
+[Moise] scheme created: s1: coffee_scheme using artifact SchemeBoard
+[Moise] group created: my_coffee_team: coffee_team using artifact ora4mas.nopl.GroupBoard
+[Cartago] Workspace w1 created.
+[Cartago] artifact water_system: tools.WaterBoilerArtifact(1000,25) at w1 created.
+[Cartago] artifact coffee_system: tools.CoffeeMachineArtifact(100,10) at w1 created.
+[FailureModel] Starting FailureModel platform...
+[OrgFailureModelManager] [OrgFailureManager] Started background organisation failure monitor with interval 1000 MILLISECONDS
+[water_boiler] 🫖 [water_boiler] Khởi động hệ thống bình đun nước nóng thông minh...
+[coffee_maker] ☕ [coffee_maker] Khởi động hệ thống máy pha & sẵn sàng tham gia Tổ chức (Organisation)...
+[water_boiler] join workspace /main/o1: done
+[coffee_maker] join workspace /main/o1: done
+[water_boiler] join workspace /main/w1: done
+[water_boiler] focusing on artifact water_system (at workspace /main/w1) using namespace default
+[coffee_maker] join workspace /main/w1: done
+[coffee_maker] focusing on artifact coffee_system (at workspace /main/w1) using namespace default
+[water_boiler] focus on water_system: done
+[water_boiler] focusing on artifact my_coffee_team (at workspace /main/o1) using namespace default
+[coffee_maker] focus on coffee_system: done
+[water_boiler] focus on my_coffee_team: done
+[coffee_maker] focusing on artifact water_system (at workspace /main/w1) using namespace default
+[water_boiler] focusing on artifact o1 (at workspace /main/o1) using namespace default
+[coffee_maker] focus on water_system: done
+[water_boiler] focus on o1: done
+[coffee_maker] focusing on artifact my_coffee_team (at workspace /main/o1) using namespace default
+[coffee_maker] focus on my_coffee_team: done
+[coffee_maker] focusing on artifact o1 (at workspace /main/o1) using namespace default
+[coffee_maker] focus on o1: done
+[coffee_maker] I am obliged to commit to coffee_making_mission on s1... doing so
+[water_boiler] I am obliged to commit to water_boiling_mission on s1... doing so
+[coffee_maker]   ↳ Bắt đầu kiểm tra các cảm biến hệ thống máy...
+[coffee_maker]   ↳ Cấp ly mới vào khay hứng dưới vòi.
+[coffee_maker]     ↳ Cảm biến nhiệt độ đầu Grouphead đạt 93°C chuẩn.
+[coffee_maker]     ↳ Khay bã còn chỗ (Hiện có: 0/10).
+[coffee_maker]   ↳ Toàn bộ cảm biến hệ thống đã sẵn sàng.
+[coffee_maker] 🔹 Chuẩn bị máy pha và khay đựng...
+[coffee_maker]   ↳ Cấp ly mới vào khay hứng dưới vòi.
+[coffee_maker]   ↳ Bắt đầu kiểm tra các cảm biến hệ thống máy...
+[coffee_maker]     ↳ Cảm biến nhiệt độ đầu Grouphead đạt 93°C chuẩn.
+[coffee_maker]     ↳ Khay bã còn chỗ (Hiện có: 0/10).
+[coffee_maker]   ↳ Toàn bộ cảm biến hệ thống đã sẵn sàng.
+[coffee_maker] ✅ Hoàn thành chuẩn bị máy.
+[coffee_maker]   ↳ Cấu hình độ mịn: SIÊU MỊN (Fine Grind) cho Espresso/Cappuccino.
+[coffee_maker]   ↳ Định lượng 18g hạt Arabica & kích hoạt cối xay hình nón...
+[coffee_maker] 🔹 Bắt đầu xử lý & xay hạt cà phê...
+[coffee_maker]   ↳ Cấu hình độ mịn: SIÊU MỊN (Fine Grind) cho Espresso/Cappuccino.
+[coffee_maker]   ↳ Định lượng 18g hạt Arabica & kích hoạt cối xay hình nón...
+[coffee_maker] ✅ Hoàn thành xay hạt cà phê.
+[water_boiler]   ↳ Mực nước đảm bảo: Hiện có 1000ml (Nhu cầu: 100ml).
+[water_boiler]   ↳ Kích hoạt thanh nhiệt gia nhiệt tới 25°C...
+[water_boiler]     ↳ Cảm biến nhiệt an toàn, chuẩn bị kích dòng đun.
+[water_boiler]   ↳ Nước đã đạt nhiệt độ tối ưu 25°C.
+[water_boiler]   ↳ Mở van solenoid xả chính xác 100ml nước sôi sang máy pha...
+[water_boiler]   ↳ Đã xả xong 100ml nước nóng.
+[water_boiler] 🫖 [water_boiler] Tiếp nhận yêu cầu: Cấp 100ml nước nóng ở 25°C...
+[water_boiler]   ↳ Mực nước đảm bảo: Hiện có 900ml (Nhu cầu: 100ml).
+[water_boiler]   ↳ Kích hoạt thanh nhiệt gia nhiệt tới 25°C...
+[water_boiler]     ↳ Cảm biến nhiệt an toàn, chuẩn bị kích dòng đun.
+[water_boiler]   ↳ Nước đã đạt nhiệt độ tối ưu 25°C.
+[water_boiler]   ↳ Mở van solenoid xả chính xác 100ml nước sôi sang máy pha...
+[water_boiler]   ↳ Đã xả xong 100ml nước nóng.
+[water_boiler] 🫖 [water_boiler] Hoàn tất toàn bộ chuỗi cấp nước sôi an toàn.
+[coffee_maker]   ↳ Phối trộn Cappuccino/Latte: Đánh bọt sữa nóng Microfoam mịn màng...
+[coffee_maker]     ↳ Pha ủ (Pre-infusion): Bơm 2 Bar nước nóng làm nở đều bánh bột trong 3s.
+[coffee_maker]     ↳ Pha ép áp suất cao (High-pressure): Kích hoạt bơm 9 Bar trong 25 giây...
+[coffee_maker]   ↳ Quy trình chiết xuất gồm 2 pha (Ủ & Ép áp suất)...
+[coffee_maker]     ↳ Pha ủ (Pre-infusion): Bơm 2 Bar nước nóng làm nở đều bánh bột trong 3s.
+[coffee_maker]     ↳ Pha ép áp suất cao (High-pressure): Kích hoạt bơm 9 Bar trong 25 giây...
+[coffee_maker]   ↳ Chiết xuất thành công 30ml Espresso Crema vàng óng.
+[coffee_maker] ✅ Chiết xuất cà phê hoàn tất.
+[coffee_maker]   ↳ Đẩy bánh bã nén vào khay thải & xả tráng vòi chiết xuất.
+[coffee_maker]   ↳ Hoàn tất trang trí bọt sữa & thông báo mời khách thưởng thức.
+[coffee_maker] 🔹 Bắt đầu phục vụ khách và vệ sinh máy...
+[coffee_maker]   ↳ Hoàn tất trang trí bọt sữa & thông báo mời khách thưởng thức.
+[coffee_maker]   ↳ Đẩy bánh bã nén vào khay thải & xả tráng vòi chiết xuất.
+[coffee_maker] ✅ Hoàn thành phục vụ và vệ sinh.
+[coffee_maker] ☕ Bắt đầu quy trình pha cà phê...
+[coffee_maker] 🔹 Chuẩn bị máy pha và khay đựng...
+[coffee_maker]   ↳ Cấp ly mới vào khay hứng dưới vòi.
+[coffee_maker]   ↳ Bắt đầu kiểm tra các cảm biến hệ thống máy...
+[coffee_maker]     ↳ Cảm biến nhiệt độ đầu Grouphead đạt 93°C chuẩn.
+[coffee_maker]     ↳ Khay bã còn chỗ (Hiện có: 2/10).
+[coffee_maker]   ↳ Toàn bộ cảm biến hệ thống đã sẵn sàng.
+[coffee_maker]   ↳ Cấp ly mới vào khay hứng dưới vòi.
+[coffee_maker]   ↳ Bắt đầu kiểm tra các cảm biến hệ thống máy...
+[coffee_maker]     ↳ Cảm biến nhiệt độ đầu Grouphead đạt 93°C chuẩn.
+[coffee_maker]     ↳ Khay bã còn chỗ (Hiện có: 2/10).
+[coffee_maker]   ↳ Toàn bộ cảm biến hệ thống đã sẵn sàng.
+[coffee_maker] ✅ Hoàn thành chuẩn bị máy.
+[coffee_maker] 🔹 Bắt đầu xử lý & xay hạt cà phê...
+[coffee_maker]   ↳ Cấu hình độ mịn: SIÊU MỊN (Fine Grind) cho Espresso/Cappuccino.
+[coffee_maker]   ↳ Định lượng 18g hạt Arabica & kích hoạt cối xay hình nón...
+[coffee_maker] ✅ Hoàn thành xay hạt cà phê.
+[coffee_maker] 🔹 Yêu cầu water_boiler cấp 100ml ở 92°C...
+[water_boiler] 🫖 [water_boiler] Tiếp nhận yêu cầu: Cấp 100ml nước nóng ở 92°C...
+[water_boiler]   ↳ Mực nước đảm bảo: Hiện có 800ml (Nhu cầu: 100ml).
+[water_boiler]   ↳ Kích hoạt thanh nhiệt gia nhiệt tới 92°C...
+[water_boiler]     ↳ Cảm biến nhiệt an toàn, chuẩn bị kích dòng đun.
+[water_boiler]   ↳ Nước đã đạt nhiệt độ tối ưu 92°C.
+[water_boiler]   ↳ Mở van solenoid xả chính xác 100ml nước sôi sang máy pha...
+[coffee_maker] ✅ Tiếp nhận nước nóng thành công từ water_boiler.
+[coffee_maker] 🔹 Bắt đầu chiết xuất và phối trộn công thức...
+[coffee_maker]   ↳ Quy trình chiết xuất gồm 2 pha (Ủ & Ép áp suất)...
+[coffee_maker]     ↳ Pha ủ (Pre-infusion): Bơm 2 Bar nước nóng làm nở đều bánh bột trong 3s.
+[water_boiler]   ↳ Đã xả xong 100ml nước nóng.
+[water_boiler] 🫖 [water_boiler] Hoàn tất toàn bộ chuỗi cấp nước sôi an toàn.
+[coffee_maker]     ↳ Pha ép áp suất cao (High-pressure): Kích hoạt bơm 9 Bar trong 25 giây...
+[coffee_maker]   ↳ Chiết xuất thành công 30ml Espresso Crema vàng óng.
+[coffee_maker]   ↳ Phối trộn Cappuccino/Latte: Đánh bọt sữa nóng Microfoam mịn màng...
+[coffee_maker] ✅ Hoàn thành chiết xuất & phối trộn.
+[coffee_maker] 🔹 Bắt đầu phục vụ khách và vệ sinh máy...
+[coffee_maker]   ↳ Hoàn tất trang trí bọt sữa & thông báo mời khách thưởng thức.
+[coffee_maker]   ↳ Đẩy bánh bã nén vào khay thải & xả tráng vòi chiết xuất.
+[coffee_maker]   ↳ Hoàn tất trang trí bọt sữa & thông báo mời khách thưởng thức.
+[coffee_maker]   ↳ Đẩy bánh bã nén vào khay thải & xả tráng vòi chiết xuất.
+[coffee_maker] ✅ Hoàn thành phục vụ và vệ sinh.
+[coffee_maker] 🎉 Hoàn tất ly cà phê thơm ngon hảo hạng!

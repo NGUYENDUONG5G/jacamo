@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="https://moise-lang.github.io/xml/os.xsl" type="text/xsl" ?>
+
+<organisational-specification
+    id="coffee_org"
+    os-version="1.1"
+    xmlns='http://moise.sourceforge.net/os'
+    xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+    xsi:schemaLocation='http://moise.sourceforge.net/os
+                        https://moise-lang.github.io/xml/os.xsd' >
+
+    <structural-specification>
+        <role-definitions>
+            <role id="coffee_maker_role" />
+            <role id="water_boiler_role" />
+        </role-definitions>
+
+        <group-specification id="coffee_team">
+            <roles>
+                <role id="coffee_maker_role" min="1" max="1" />
+                <role id="water_boiler_role" min="1" max="1" />
+            </roles>
+            <formation-constraints>
+                <compatibility from="coffee_maker_role" to="water_boiler_role" scope="intra-group" bi-dir="true"/>
+            </formation-constraints>
+        </group-specification>
+    </structural-specification>
+
+    <functional-specification>
+        <scheme id="coffee_scheme">
+            
+            <goal id="prepare_ingredients">
+                <plan operator="parallel">
+                    <goal id="boil_water" />
+                    <goal id="grind_beans" />
+                </plan>
+            </goal>
+
+            <mission id="coffee_making_mission" min="1" max="1">
+                <goal id="grind_beans" />
+            </mission>
+
+            <mission id="water_boiling_mission" min="1" max="1">
+                <goal id="boil_water" />
+            </mission>
+        </scheme>
+    </functional-specification>
+
+    <normative-specification>
+        <norm id="norm_coffee_maker" type="obligation" role="coffee_maker_role" mission="coffee_making_mission" />
+        <norm id="norm_water_boiler" type="obligation" role="water_boiler_role" mission="water_boiling_mission" />
+    </normative-specification>
+
+</organisational-specification>

@@ -1,0 +1,48 @@
+[FailureModel] Initializing FailureModel platform...
+[OrgFailureModelManager] [OrgFailureManager] Registered 6 failure(s) for Organisation: o1
+[OrgFailureModelManager] [OrgFailureManager] Registered 1 failure(s) for Group: my_coffee_team
+[OrgFailureModelManager] [OrgFailureManager] Registered 1 failure(s) for Scheme: s1
+[coffee_maker] [FailureModelManager] Registered failure monitoring for goal: place_cup_failure on agent: coffee_maker
+[coffee_maker] [FailureModelManager] Registered failure monitoring for goal: grind_beans_failure on agent: coffee_maker
+[coffee_maker] [FailureModelManager] Registered failure monitoring for goal: brew_coffee_failure on agent: coffee_maker
+[water_boiler] [FailureModelManager] Registered failure monitoring for goal: water_boiler_coordination on agent: water_boiler
+[Moise] OrgBoard o1 created.
+[Moise] scheme created: s1: coffee_scheme using artifact SchemeBoard
+[Moise] group created: my_coffee_team: coffee_team using artifact ora4mas.nopl.GroupBoard
+[Cartago] Workspace w1 created.
+[Cartago] artifact water_system: tools.WaterBoilerArtifact(1000,25) at w1 created.
+[Cartago] artifact coffee_system: tools.CoffeeMachineArtifact(100) at w1 created.
+[FailureModel] Starting FailureModel platform...
+[OrgFailureModelManager] [OrgFailureManager] Started background organisation failure monitor with interval 1000 MILLISECONDS
+[water_boiler] join workspace /main/o1: done
+[coffee_maker] join workspace /main/o1: done
+[water_boiler] join workspace /main/w1: done
+[coffee_maker] join workspace /main/w1: done
+[water_boiler] focusing on artifact water_system (at workspace /main/w1) using namespace default
+[coffee_maker] focusing on artifact coffee_system (at workspace /main/w1) using namespace default
+[water_boiler] focus on water_system: done
+[water_boiler] focusing on artifact my_coffee_team (at workspace /main/o1) using namespace default
+[coffee_maker] focus on coffee_system: done
+[water_boiler] focus on my_coffee_team: done
+[coffee_maker] focusing on artifact water_system (at workspace /main/w1) using namespace default
+[water_boiler] focusing on artifact o1 (at workspace /main/o1) using namespace default
+[coffee_maker] focus on water_system: done
+[water_boiler] focus on o1: done
+[coffee_maker] focusing on artifact my_coffee_team (at workspace /main/o1) using namespace default
+[coffee_maker] focus on my_coffee_team: done
+[coffee_maker] focusing on artifact o1 (at workspace /main/o1) using namespace default
+[coffee_maker] focus on o1: done
+[coffee_maker] I am obliged to commit to coffee_making_mission on s1... doing so
+[water_boiler] I am obliged to commit to water_boiling_mission on s1... doing so
+[water_boiler] 🫖 [WaterBoiler] Bắt đầu quy trình chuẩn bị nước nóng...
+[coffee_maker] ☕ [CoffeeMaker] Bắt đầu quy trình chuẩn bị và xay hạt cà phê...
+[water_boiler] 🫖 [WaterBoiler] Kiểm tra dung tích nước...
+[coffee_maker] ☕ [EnsureRequiredBeanAmount] Kiểm tra định lượng hạt...
+[water_boiler] 🫖     Mực nước hiện tại đã đạt yêu cầu: 1000ml.
+[coffee_maker] ☕     [SetBeanAmount] Lượng hạt hiện tại đạt yêu cầu: 100g.
+[water_boiler] 🫖 [WaterBoiler] Kiểm tra nhiệt độ nước...
+[coffee_maker] ☕ [GrindCoffeeBeans] Bắt đầu tiến trình xay...
+[water_boiler] 🫖     Nhiệt độ hiện tại: 25°C. Bắt đầu đun, đang chờ nhiệt độ đạt >= 92°C (nạp từ Web)...
+[coffee_maker] ☕     [Grind] Định lượng 18g hạt & kích hoạt máy xay...
+[coffee_maker] ☕     [Grind] Đã xay & nén bột cà phê mịn sẵn sàng.
+[coffee_maker] ☕ ✅ [CoffeeMaker] Đã hoàn tất xay hạt cà phê tiêu chuẩn.
