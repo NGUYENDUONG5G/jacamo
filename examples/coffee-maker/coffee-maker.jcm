@@ -4,19 +4,18 @@ mas coffee_maker_mas {
     // 1. TÁC TỬ (AGENTS)
     // ========================================================================
     
-    // Tác tử Máy pha cà phê (Coffee Maker)
-    agent coffee_maker : coffee_maker/coffee_maker.asl {
+    // Tác tử Máy xay & Chuẩn bị Cà phê (Coffee Grinder)
+    agent coffee_grinder : coffee_grinder/coffee_grinder.asl {
         join: w1
         focus: w1.coffee_system
-        focus: w1.water_system
-        failure: place_cup_failure, grind_beans_failure, brew_coffee_failure
+        failure: grind_beans
     }
 
     // Tác tử Máy đun nước nóng thông minh (Water Boiler)
     agent water_boiler : water_boiler/water_boiler.asl {
         join: w1
         focus: w1.water_system
-        failure: water_boiler_coordination
+        failure: boil_water
     }
 
     // ========================================================================
@@ -33,9 +32,9 @@ mas coffee_maker_mas {
     organisation o1 : src/org/coffee-org.xml {
         group my_coffee_team : coffee_team {
             responsible-for: s1
-            players: coffee_maker coffee_maker_role
-                     water_boiler water_boiler_role
-            failure: boiler_coordination
+            players: coffee_grinder coffee_maker_role
+                     water_boiler  water_boiler_role
+            failure: coffee_team_coordination
         }
 
         scheme s1 : coffee_scheme {
@@ -44,73 +43,66 @@ mas coffee_maker_mas {
     }
 
     // ========================================================================
-    // 4. ĐẶC TẢ FAILURE MODEL CHO TỔ CHỨC
+    // 4. ĐẶC TẢ FAILURE MODEL CHO TỔ CHỨC (ORGANISATION FAILURES)
     // ========================================================================
-    failure boiler_coordination {
-        error missing_boiler {
+    
+    // Giám sát phối hợp tổ chức trong nhóm pha chế
+    failure coffee_team_coordination {
+        error missing_boiler_agent {
             conditions: "cardinality(water_boiler_role) < 1"
-            recovery-activities: "goal:reconnect_boiler_recovery"
+            recovery-activities: "org:my_coffee_team.adoptRole(water_boiler_role)", 
+                                "goal:notify_maintenance"
+        }
+        error missing_brewer_agent {
+            conditions: "cardinality(coffee_maker_role) < 1"
+            recovery-activities: "org:my_coffee_team.adoptRole(coffee_maker_role)", 
+                                "goal:notify_maintenance"
         }
     }
 
+    // Giám sát tiến độ thực thi Scheme đồ hình pha chế
     failure coffee_scheme_execution {
-        error scheme_timeout {
-            conditions: coffee_scheme_deadlock
-            recovery-activities: "goal:reset_simulation"
+        error scheme_deadlock {
+            conditions: scheme_deadlock
+            recovery-activities: "org:s1.substitute_scheme(emergency_coffee_scheme)", 
+                                "goal:reset_simulation"
+        }
+        error brewing_timeout {
+            conditions: brewing_timeout
+            recovery-activities: "goal:abort_and_clean_up", 
+                                "env:w1.coffee_system.cancel_operation"
         }
     }
 
     // ========================================================================
-    // 5. ĐẶC TẢ FAILURE MODEL CHO TÁC TỬ & MÔI TRƯỜNG
+    // 5. ĐẶC TẢ FAILURE MODEL CHO TÁC TỬ (AGENT & GOAL FAILURES)
     // ========================================================================
 
-    // Giám sát sự cố Máy đun nước
-    failure water_boiler_coordination {
-        error empty_water_tank {
-            conditions: water_tank_empty
-            recovery-activities: "goal:refill_water_recovery", 
-                                "env:w1.water_system.refill_water(1000)"
-        }
-        error overheat_danger {
-            conditions: overheat_alert
-            recovery-activities: "goal:emergency_cooldown_recovery", 
-                                "env:w1.water_system.emergency_cooldown"
-        }
-        error temperature_sensor_fault {
-            conditions: sensor_error
-            recovery-activities: "goal:recalibrate_sensor_recovery", 
-                                "env:w1.water_system.recalibrate_sensor"
-        }
-    }
-
-    // [G1] Sự cố chuẩn bị máy & ly đựng
-    failure place_cup_failure {
-        error missing_cup {
-            conditions: cup_missing
-            recovery-activities: "goal:place_cup_recovery", 
-                                "env:w1.coffee_system.place_cup"
-        }
-        error full_waste_bin {
-            conditions: waste_bin_full
-            recovery-activities: "goal:empty_waste_recovery", 
-                                "env:w1.coffee_system.empty_waste_tray"
-        }
-    }
-
-    // [G2] Sự cố xay hạt cà phê
-    failure grind_beans_failure {
+    // Giám sát mục tiêu xay hạt cà phê [grind_beans] của tác tử coffee_grinder
+    failure grind_beans {
         error no_beans {
             conditions: beans_depleted
-            recovery-activities: "goal:refill_beans_recovery", 
+            recovery-activities: "goal:ensure_required_bean_amount", 
                                 "env:w1.coffee_system.refill_beans(200)"
+        }
+        error grinder_jammed {
+            conditions: grinder_overload
+            recovery-activities: "goal:unclog_grinder", 
+                                "env:w1.coffee_system.reset_grinder"
         }
     }
 
-    // [G3] Sự cố chiết xuất áp suất
-    failure brew_coffee_failure {
-        error low_pressure {
-            conditions: pump_pressure_low
-            recovery-activities: "goal:recalibrate_pressure_recovery"
+    // Giám sát mục tiêu đun nước sôi [boil_water] của tác tử water_boiler
+    failure boil_water {
+        error insufficient_supply_water {
+            conditions: supply_water_insufficient
+            recovery-activities: "goal:ensure_sufficient_water_volume", 
+                                "env:w1.water_system.refill_supply_tank(1000)"
+        }
+        error heater_overheated {
+            conditions: water_overheated
+            recovery-activities: "goal:cooldown_boiler", 
+                                "env:w1.water_system.cool_down"
         }
     }
 }

@@ -23,6 +23,8 @@ import com.sun.net.httpserver.HttpServer;
 
 import jason.mas2j.AgentParameters;
 import jacamo.infra.JaCaMoAgArch;
+import jacamo.infra.JaCaMoLauncher;
+import jacamo.project.JaCaMoProject;
 import jacamo.project.JaCaMoAgentParameters;
 import jacamo.project.JaCaMoFailureModelParameters;
 import jacamo.project.JaCaMoGroupParameters;
@@ -831,10 +833,31 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                 beliefStr = propName;
             }
 
+            JaCaMoProject currentProject = this.project != null ? this.project : (JaCaMoLauncher.getJaCaMoRunner() != null ? JaCaMoLauncher.getJaCaMoRunner().getJaCaMoProject() : null);
+
             if (jason.infra.local.RunLocalMAS.getRunner() != null) {
                 var agsMap = jason.infra.local.RunLocalMAS.getRunner().getAgs();
                 if (agsMap != null) {
                     for (String agName : agsMap.keySet()) {
+                        boolean shouldPropagate = false;
+                        if (currentProject != null && currentProject.getAgents() != null) {
+                            for (AgentParameters ap : currentProject.getAgents()) {
+                                if (ap.getAgName().equals(agName) && ap instanceof JaCaMoAgentParameters) {
+                                    JaCaMoAgentParameters jap = (JaCaMoAgentParameters) ap;
+                                    if (jap.getFocus() != null) {
+                                        for (String[] foc : jap.getFocus()) {
+                                            if (foc != null && foc.length > 0 && artName.equals(foc[0])) {
+                                                shouldPropagate = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!shouldPropagate) continue;
+
                         var agArch = jason.infra.local.RunLocalMAS.getRunner().getAg(agName);
                         if (agArch != null && agArch.getTS() != null && agArch.getTS().getAg() != null) {
                             jason.asSemantics.Agent ag = agArch.getTS().getAg();
@@ -996,13 +1019,10 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                                 ((cartago.ObsProperty) op).updateValue("");
                             }
                         } else {
+                            Object[] valuesToDefine = (parsedValues != null && parsedValues.length > 0) ? parsedValues : new Object[0];
                             java.lang.reflect.Method mDef = cartago.Artifact.class.getDeclaredMethod("defineObsProperty", String.class, Object[].class);
                             mDef.setAccessible(true);
-                            if (parsedValues != null && parsedValues.length > 0) {
-                                mDef.invoke(artObj, propName, parsedValues);
-                            } else {
-                                mDef.invoke(artObj, propName, new Object[]{});
-                            }
+                            mDef.invoke(artObj, new Object[]{ propName, valuesToDefine });
                         }
                     }
                 }
