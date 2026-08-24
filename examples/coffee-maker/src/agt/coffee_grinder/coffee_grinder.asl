@@ -6,8 +6,7 @@
 +start_grind  <- !grind_beans.
 
 +!grind_beans : start_grind
-   <- .print("☕ [CoffeeGrinder] Nhận lệnh từ Web -> Bắt đầu quy trình chuẩn bị và xay hạt cà phê...");
-      .and_branches([ensure_required_bean_amount, grind_coffee_beans]);
+   <- .and_branches([ensure_required_bean_amount, grind_coffee_beans]);
       .print("☕ ✅ [CoffeeGrinder] Đã hoàn tất xay hạt cà phê tiêu chuẩn.").
 
 +!grind_beans
@@ -21,8 +20,8 @@
    <- .print("☕     [SetBeanAmount] Lượng hạt hiện tại không đủ (", B, "g < 18g). Tự động nạp bổ sung hạt...");
       refill_beans(100);
       -beans_empty_detected;
-      .wait( beans_level(NewB) & NewB >= 18 );
-      .print("☕     [SetBeanAmount] Đã nhận được lượng hạt đạt yêu cầu: ", NewB, "g.").
+      .wait( beans_level(NewB) & NewB >= 18 ).
+
 
 +!set_bean_amount : beans_level(B) & B >= 18
    <- .print("☕     [SetBeanAmount] Lượng hạt hiện tại đạt yêu cầu: ", B, "g.").
@@ -43,22 +42,22 @@
       !set_bean_amount.
 
 +!unclog_grinder
-   <- .print("☕ 🛡️ [Adaptation] Phát hiện cối xay bị kẹt! Đang đảo chiều động cơ và reset cối xay...");
+   <- .print("☕ Phát hiện cối xay bị kẹt! Đang đảo chiều động cơ và reset cối xay...");
       reset_grinder;
       -grinder_motor_stuck;
       .wait(500);
-      .print("☕ 🛡️ [Adaptation] Cối xay đã được thông và hoạt động bình thường.").
+      .print("☕ 🛡️ Cối xay đã được thông và hoạt động bình thường.").
 
 +!notify_maintenance
-   <- .print("☕ 📢 [OrgAdaptation] Gửi cảnh báo đến hệ thống bảo trì thiết bị pha chế.").
+   <- .print("☕ Gửi cảnh báo đến hệ thống bảo trì thiết bị pha chế.").
 
 +!reset_simulation
-   <- .print("☕ 🔄 [OrgAdaptation] Đang thiết lập lại đồ hình pha chế và môi trường...");
+   <- .print("☕ Đang thiết lập lại đồ hình pha chế và môi trường...");
       cancel_operation;
       -start_grind;
       -ground_coffee_ready;
-      .print("☕ 🔄 [OrgAdaptation] Đã hoàn tất reset chu trình pha chế.").
+      .print("☕ Đã hoàn tất reset chu trình pha chế.").
 
 +!abort_and_clean_up
-   <- .print("☕ 🛑 [OrgAdaptation] Tiến trình quá hạn! Hủy thao tác xay và trả máy về trạng thái an toàn...");
+   <- .print("☕ Tiến trình quá hạn! Hủy thao tác xay và trả máy về trạng thái an toàn...");
       cancel_operation.
