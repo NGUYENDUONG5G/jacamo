@@ -29,16 +29,16 @@
 
 +!grind_coffee_beans
    <- .print("☕ [GrindCoffeeBeans] Bắt đầu tiến trình xay...");
-      !grind.
+      !grind_step.
 
-+!grind : beans_level(B) & B >= 18
++!grind_step : beans_level(B) & B >= 18
    <- .print("☕     [Grind] Định lượng 18g hạt & kích hoạt máy xay...");
       grind_beans(18);
       +ground_coffee_ready;
       .wait(800);
       .print("☕     [Grind] Đã xay & nén bột cà phê mịn sẵn sàng.").
 
-+!grind : beans_level(B) & B < 18
++!grind_step : beans_level(B) & B < 18
    <- .print("☕ ⚠️  [Grind] Lượng hạt không đủ để xay (", B, "g). Đang chờ thích ứng nạp hạt...");
       !set_bean_amount.
 

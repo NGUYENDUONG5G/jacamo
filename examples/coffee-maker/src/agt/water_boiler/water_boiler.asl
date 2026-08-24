@@ -15,29 +15,29 @@
 
 +!ensure_sufficient_water_volume
    <- .print("🫖 [WaterBoiler] Kiểm tra dung tích nước buồng đun...");
-      .or_branches([pump_water_step, skip_pump_step]).
+      !check_water_step.
 
-+!pump_water_step : water_volume(W) & W < 100
++!check_water_step : water_volume(W) & W < 100
    <- .print("🫖     Mực nước buồng đun thấp (", W, "ml). Bơm hút nước từ khoang chứa bên ngoài...");
       draw_water_from_tank(500);
       -supply_tank_empty;
       .wait( water_volume(NewW) & NewW >= 100 );
       .print("🫖     Đã nạp đủ nước vào buồng đun: ", NewW, "ml.").
 
-+!skip_pump_step : water_volume(W) & W >= 100
++!check_water_step : water_volume(W) & W >= 100
    <- .print("🫖     Mực nước buồng đun hiện tại đã đạt yêu cầu: ", W, "ml.").
 
 +!increase_water_temperature
    <- .print("🫖 [WaterBoiler] Kiểm tra nhiệt độ nước...");
-      .or_branches([heat_water_to_target_temperature, temperature_already_hot]).
+      !heat_step.
 
-+!heat_water_to_target_temperature : current_temp(CT) & CT < 92
++!heat_step : current_temp(CT) & CT < 92
    <- .print("🫖     Nhiệt độ hiện tại: ", CT, "°C. Bắt đầu kích hoạt thanh nhiệt đun tới 92°C...");
       heat_water_to(92);
       .wait( current_temp(T) & T >= 92 );
       .print("🫖     Đã nhận được nhiệt độ đạt chuẩn: ", T, "°C.").
 
-+!temperature_already_hot : current_temp(CT) & CT >= 92
++!heat_step : current_temp(CT) & CT >= 92
    <- .print("🫖     Nước đã đủ nhiệt độ yêu cầu: ", CT, "°C.").
 
 +!cooldown_boiler

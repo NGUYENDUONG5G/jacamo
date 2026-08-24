@@ -1019,7 +1019,7 @@ public class GoalModelWebInspector extends DefaultPlatformImpl {
                                 ((cartago.ObsProperty) op).updateValue("");
                             }
                         } else {
-                            Object[] valuesToDefine = (parsedValues != null && parsedValues.length > 0) ? parsedValues : new Object[0];
+                            Object[] valuesToDefine = (parsedValues != null && parsedValues.length > 0) ? parsedValues : new Object[]{ "" };
                             java.lang.reflect.Method mDef = cartago.Artifact.class.getDeclaredMethod("defineObsProperty", String.class, Object[].class);
                             mDef.setAccessible(true);
                             mDef.invoke(artObj, new Object[]{ propName, valuesToDefine });
