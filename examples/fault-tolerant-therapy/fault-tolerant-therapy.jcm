@@ -1,0 +1,23 @@
+/*
+    JaCaMo Project File: Fault-Tolerant Therapy Example
+*/
+
+mas therapy_mas {
+
+    agent alice_patient : patient.asl
+    agent dr_bob        : doctor.asl
+    agent carol_pharma  : pharmacist.asl
+
+    organisation medical_org: therapy-os.xml {
+        group t_group: therapy_group {
+            responsible-for: main_sch
+            players: alice_patient patient
+                     dr_bob        doctor
+                     carol_pharma  pharmacist
+        }
+        scheme main_sch: therapy_sch
+    }
+
+    asl-path: "src/agt"
+    org-path: "src/org"
+}

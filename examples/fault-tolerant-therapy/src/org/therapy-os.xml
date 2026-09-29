@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="https://moise-lang.github.io/xml/os.xsl" type="text/xsl"?>
+
+<organisational-specification
+    id="medical_therapy"
+    os-version="1.1">
+
+    <structural-specification>
+        <role-definitions>
+            <role id="patient" />
+            <role id="doctor" />
+            <role id="pharmacist" />
+        </role-definitions>
+
+        <group-specification id="therapy_group">
+            <roles>
+                <role id="patient" min="1" max="1" />
+                <role id="doctor" min="1" max="1" />
+                <role id="pharmacist" min="1" max="1" />
+            </roles>
+        </group-specification>
+    </structural-specification>
+
+    <functional-specification>
+        <scheme id="therapy_sch">
+            <goal id="therapy">
+                <plan operator="parallel">
+                    <goal id="cpf">
+                        <plan operator="sequence">
+                            <goal id="consult" />
+                            <goal id="prescribe" />
+                            <goal id="fill_prescription" />
+                        </plan>
+                    </goal>
+                    <goal id="follow_therapy" ttf="5 day" />
+                </plan>
+            </goal>
+
+            <mission id="mPatient" min="1" max="1">
+                <goal id="consult" />
+                <goal id="follow_therapy" />
+            </mission>
+            <mission id="mDoctor" min="1" max="1">
+                <goal id="prescribe" />
+            </mission>
+            <mission id="mPharmacist" min="1" max="1">
+                <goal id="fill_prescription" />
+            </mission>
+
+
+            <failure id="f_follow_therapy" goal="follow_therapy">
+                <error id="lost_symptoms">
+                    <condition>
+                        <![CDATA[ symptoms_cleared(Patient, Day) & Day < 5 ]]>
+                    </condition>
+                    <argument id="patient_id" arity="1" />
+                    <argument id="cleared_day" arity="1" />
+                    <argument id="early_recovery_reason" arity="1" />
+                    <recoveryact scheme="reconsult_scheme" />
+                </error>
+
+                <error id="no_delivery">
+                    <condition>
+                        <![CDATA[ not delivered(PrescriptionId) & ctime(Now) & Now > Deadline ]]>
+                    </condition>
+                    <argument id="prescription_id" arity="1" />
+                    <argument id="delivery_address" arity="1" />
+                    <argument id="delivery_attempt" arity="1" />
+                    <argument id="failure_cause" arity="1" />
+                    <recoveryact scheme="redelivery_scheme" />
+                </error>
+            </failure>
+        </scheme>
+
+
+        <scheme id="reconsult_scheme">
+            <goal id="reconsult_goal">
+                <plan operator="sequence">
+                    <goal id="review_symptoms" />
+                    <goal id="adjust_therapy" />
+                </plan>
+            </goal>
+
+            <mission id="mDoctorReconsult" min="1" max="1">
+                <goal id="review_symptoms" />
+                <goal id="adjust_therapy" />
+            </mission>
+        </scheme>
+    </functional-specification>
+
+    <normative-specification>
+        <norm id="n1" type="obligation" role="patient" mission="mPatient" />
+        <norm id="n2" type="obligation" role="doctor" mission="mDoctor" />
+        <norm id="n3" type="obligation" role="pharmacist" mission="mPharmacist" />
+        <norm id="n4" type="obligation" role="doctor" mission="mDoctorReconsult" />
+    </normative-specification>
+</organisational-specification>

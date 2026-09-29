@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://moise.sourceforge.net/os"
+           xmlns="http://moise.sourceforge.net/os"
+           elementFormDefault="qualified">
+
+    <!-- Argument Specification -->
+    <xs:element name="argument" type="argumentType" />
+    <xs:complexType name="argumentType">
+        <xs:attribute name="id" type="xs:ID" use="required" />
+        <xs:attribute name="arity" type="xs:integer" use="required" />
+    </xs:complexType>
+
+    <!-- Condition Specification -->
+    <xs:element name="condition" type="xs:string" />
+
+    <!-- Recovery Action Specification -->
+    <xs:element name="recoveryact" type="recoveryActType" />
+    <xs:complexType name="recoveryActType">
+        <xs:attribute name="scheme" type="xs:string" use="required" />
+    </xs:complexType>
+
+    <!-- Error Specification -->
+    <xs:element name="error" type="errorType" />
+    <xs:complexType name="errorType">
+        <xs:sequence>
+            <xs:element ref="condition" minOccurs="1" maxOccurs="1" />
+            <xs:element ref="argument" minOccurs="0" maxOccurs="unbounded" />
+            <xs:element ref="recoveryact" minOccurs="1" maxOccurs="1" />
+        </xs:sequence>
+        <xs:attribute name="id" type="xs:ID" use="required" />
+    </xs:complexType>
+
+    <!-- Failure Specification -->
+    <xs:element name="failure" type="failureType" />
+    <xs:complexType name="failureType">
+        <xs:sequence>
+            <xs:element ref="error" minOccurs="1" maxOccurs="unbounded" />
+        </xs:sequence>
+        <xs:attribute name="id" type="xs:ID" use="optional" />
+        <xs:attribute name="goal" type="xs:string" use="required" />
+    </xs:complexType>
+
+</xs:schema>

@@ -49,3 +49,6 @@ settings.gradle
 demos/integration/dummyart-nodered-mqtt/node-red/.config.json.backup
 demos/integration/dummyag-nodered-mqtt/node-red/.config.json.backup
 doc/devs/creating-packages/based-on-existing-project.html
+
+sample_org.xml
+implementation_plan.md

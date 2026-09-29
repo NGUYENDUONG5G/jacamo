@@ -1,0 +1,68 @@
+/*
+   Project fault-tolerant-therapy
+
+   Gradle build file for JaCaMo Applications
+*/
+
+plugins {
+    id 'com.gradleup.shadow' version '8.3.3'
+    id 'java'
+    id 'maven-publish'
+}
+
+defaultTasks 'run'
+
+apply from: '.jcm-deps.gradle'
+
+version '1.0'
+group   'org.jacamo'
+
+repositories {
+    maven { url "https://raw.githubusercontent.com/jacamo-lang/mvn-repo/master" }
+    maven { url "https://repo.gradle.org/gradle/libs-releases" }
+    flatDir { dirs 'lib' }
+    mavenCentral()
+    maven { url "https://jitpack.io" }
+}
+
+dependencies {
+    // Include local root compiled classes (moise and ora4mas fault tolerance extensions)
+    implementation files('../../build/classes/java/main')
+    implementation('org.jacamo:jacamo:1.3.0')
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/env'
+            srcDir 'src/agt'
+            srcDir 'src/org'
+            srcDir 'src/int'
+            srcDir 'src/java'
+        }
+        resources {
+            srcDir 'src/resources'
+            srcDir 'src/org'
+            srcDir 'src/agt'
+        }
+    }
+}
+
+task run (type: JavaExec, dependsOn: 'classes') {
+    group       ' JaCaMo'
+    description 'runs the JaCaMo application'
+    doFirst {
+        mkdir 'log'
+    }
+    mainClass = 'jacamo.infra.JaCaMoLauncher'
+    args 'fault-tolerant-therapy.jcm'
+    standardInput = System.in
+    systemProperty 'java.util.logging.config.file', new File(projectDir, 'logging.properties').absolutePath
+    classpath sourceSets.main.runtimeClasspath
+}
+
+task buildJCMDeps (type: JavaExec, dependsOn: 'classes') {
+    mainClass = 'jacamo.infra.RunJaCaMoProject'
+    args = ['fault-tolerant-therapy.jcm', '--deps']
+    classpath sourceSets.main.runtimeClasspath
+}
