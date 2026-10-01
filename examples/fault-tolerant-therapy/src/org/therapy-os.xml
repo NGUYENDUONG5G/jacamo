@@ -3,7 +3,12 @@
 
 <organisational-specification
     id="medical_therapy"
-    os-version="1.1">
+    os-version="1.1"
+
+    xmlns='http://moise.sourceforge.net/os'
+    xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+    xsi:schemaLocation='http://moise.sourceforge.net/os
+                        https://moise-lang.github.io/xml/os.xsd' >
 
     <structural-specification>
         <role-definitions>

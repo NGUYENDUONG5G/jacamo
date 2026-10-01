@@ -1,6 +1,7 @@
 // Agent Pharmacist
 { include("$jacamoJar/templates/common-cartago.asl") }
 { include("$jacamoJar/templates/common-moise.asl") }
+{ include("$moise/asl/org-obedient.asl") }
 
 !start.
 

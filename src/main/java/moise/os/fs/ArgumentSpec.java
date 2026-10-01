@@ -2,9 +2,7 @@ package moise.os.fs;
 
 import java.io.Serializable;
 
-/**
- * Specification of an argument/parameter for an organizational error.
- */
+
 public class ArgumentSpec implements Serializable {
     private static final long serialVersionUID = 1L;
 

@@ -82,4 +82,84 @@ public class FaultTolerantSchemeBoardTest {
         board.failGoal("follow_therapy");
         assertTrue("Goal should be marked as failed", board.isGoalFailed("follow_therapy"));
     }
+
+    @Test
+    public void testArgumentResolutionFromAgentBeliefBase() throws Exception {
+        FaultTolerantSchemeBoard board = new FaultTolerantSchemeBoard();
+
+        // Tao 1 Agent gia lap voi Belief Base chua cac belief delivery_address, prescription_id, delivery_attempt
+        jason.asSemantics.Agent carrier = new jason.asSemantics.Agent();
+        carrier.initAg();
+        carrier.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("delivery_address(\"Số 1 Đại Cồ Việt, Hà Nội\")"));
+        carrier.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("prescription_id(p101)"));
+        carrier.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("delivery_attempt(3)"));
+        carrier.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("location(105, 21)"));
+
+        board.registerAgent("carrier", carrier);
+
+        // Test 1: <argument id="delivery_address" arity="1" />
+        ArgumentSpec argAddress = new ArgumentSpec("delivery_address", 1);
+        Object resolvedAddress = board.resolveArgumentValue(argAddress, null);
+        assertEquals("Số 1 Đại Cồ Việt, Hà Nội", resolvedAddress);
+
+        // Test 2: <argument id="prescription_id" arity="1" />
+        ArgumentSpec argPrescription = new ArgumentSpec("prescription_id", 1);
+        Object resolvedPrescription = board.resolveArgumentValue(argPrescription, null);
+        assertEquals("p101", resolvedPrescription);
+
+        // Test 3: <argument id="delivery_attempt" arity="1" />
+        ArgumentSpec argAttempt = new ArgumentSpec("delivery_attempt", 1);
+        Object resolvedAttempt = board.resolveArgumentValue(argAttempt, null);
+        assertEquals(3L, resolvedAttempt);
+
+        // Test 4: <argument id="location" arity="2" />
+        ArgumentSpec argLocation = new ArgumentSpec("location", 2);
+        Object resolvedLocation = board.resolveArgumentValue(argLocation, null);
+        assertTrue(resolvedLocation instanceof List);
+        List<?> locList = (List<?>) resolvedLocation;
+        assertEquals(2, locList.size());
+        assertEquals(105L, locList.get(0));
+        assertEquals(21L, locList.get(1));
+    }
+
+    @Test
+    public void testErrorTriggerWithAgentBeliefResolution() throws Exception {
+        File file = new File("sample_org.xml");
+        Map<String, List<Failure>> failuresByScheme = FaultTolerantXMLReader.parseFailuresFromFile(file);
+
+        FaultTolerantSchemeBoard board = new FaultTolerantSchemeBoard();
+        for (Failure f : failuresByScheme.get("therapy_sch")) {
+            board.addFailureSpec(f);
+        }
+
+        // Dang ky agent benh nhan co dia chi giao hang
+        jason.asSemantics.Agent patient = new jason.asSemantics.Agent();
+        patient.initAg();
+        patient.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("delivery_address(\"221B Baker Street\")"));
+        patient.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("delivery_attempt(1)"));
+        patient.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("failure_cause(\"recipient_absent\")"));
+        patient.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("prescription_id(rx999)"));
+        board.registerAgent("alice_patient", patient);
+
+        // Kich hoat loi no_delivery:
+        // condition: not delivered(PrescriptionId) & ctime(Now) & Now > Deadline
+        // Them ctime va Deadline de thoa man Now > Deadline
+        board.updateOrgBelief("ctime(100)");
+        board.updateOrgBelief("delivered(rx999)"); // Ban dau da delivered thi NOT TRIGGER
+        assertFalse(board.isGoalSuspended("follow_therapy"));
+
+        // Khi co loi missing_prescription:
+        // condition: achieved(therapy_sch, consult, Doctor) & not available(prescription)
+        // Agent doctor co doctor_id va issue_type
+        jason.asSemantics.Agent doctor = new jason.asSemantics.Agent();
+        doctor.initAg();
+        doctor.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("doctor_id(dr_bob)"));
+        doctor.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("consultation_id(c001)"));
+        doctor.getBB().add(jason.asSyntax.ASSyntax.parseLiteral("issue_type(\"pharmacy_out_of_stock\")"));
+        board.registerAgent("dr_bob", doctor);
+
+        board.updateOrgBelief("achieved(therapy_sch, consult, dr_bob)");
+        // Se kich hoat missing_prescription va treo goal follow_therapy
+        assertTrue("Goal follow_therapy should be suspended", board.isGoalSuspended("follow_therapy"));
+    }
 }

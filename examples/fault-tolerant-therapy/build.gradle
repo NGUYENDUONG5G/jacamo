@@ -26,8 +26,9 @@ repositories {
 }
 
 dependencies {
-    // Include local root compiled classes (moise and ora4mas fault tolerance extensions)
+    // Include local root compiled classes and resources (moise and ora4mas fault tolerance extensions)
     implementation files('../../build/classes/java/main')
+    implementation files('../../build/resources/main')
     implementation('org.jacamo:jacamo:1.3.0')
 }
 

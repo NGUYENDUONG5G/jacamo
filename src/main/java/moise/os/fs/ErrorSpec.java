@@ -5,9 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Specification of an error/exception for a goal in a Scheme.
- */
+
 public class ErrorSpec implements Serializable {
     private static final long serialVersionUID = 1L;
 
