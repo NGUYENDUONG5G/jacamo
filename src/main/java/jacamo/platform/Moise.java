@@ -58,7 +58,7 @@ public class Moise extends DefaultPlatformImpl {
                         //currentWks = main.getChildWSP(o.getInstitution()).get().getWorkspace();
                         boardClass = "sai.bridges.jacamo.OrgBoardSai";
                     } else {
-                        boardClass = "ora4mas.nopl.OrgBoard";
+                        boardClass = "ora4mas.nopl.FaultTolerantOrgBoard";
                     }
                     currentWks = main.createWorkspace(o.getName()).getWorkspace();
                     context = currentWks.joinWorkspace(new AgentIdCredential("JaCaMoLauncherAgOrg"), new ICartagoCallback() {

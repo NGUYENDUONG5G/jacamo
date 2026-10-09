@@ -3,6 +3,9 @@
 { include("$jacamoJar/templates/common-moise.asl") }
 { include("$moise/asl/org-obedient.asl") }
 
+// Beliefs
+early_recovery_reason("no_more_symptoms").
+
 !start.
 
 +!start <-
@@ -42,3 +45,4 @@
     .wait(1000);
     .print("Hoan tat toan bo lieu trinh dieu tri!");
     goalAchieved(follow_therapy).
+

@@ -18,6 +18,7 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
 import moise.os.fs.ArgumentSpec;
+import moise.os.fs.ConditionSpec;
 import moise.os.fs.ErrorSpec;
 import moise.os.fs.Failure;
 import moise.os.fs.RecoveryAct;
@@ -124,11 +125,11 @@ public class FaultTolerantXMLReader {
             String tagName = childEle.getNodeName().toLowerCase();
 
             if ("condition".equals(tagName)) {
-                error.setCondition(childEle.getTextContent().trim());
+                error.setCondition(new ConditionSpec(childEle.getTextContent().trim()));
             } else if ("argument".equals(tagName)) {
                 String argId = childEle.getAttribute("id");
                 if (argId == null || argId.isEmpty()) {
-                    argId = childEle.getAttribute("name"); // fallback compatibility
+                    argId = childEle.getAttribute("name"); 
                 }
                 int arity = 1;
                 String arityStr = childEle.getAttribute("arity");
@@ -160,9 +161,9 @@ public class FaultTolerantXMLReader {
             Element errEle = doc.createElement("error");
             errEle.setAttribute("id", err.getId());
 
-            if (err.getCondition() != null) {
+            if (err.getCondition() != null && !err.getCondition().isEmpty()) {
                 Element condEle = doc.createElement("condition");
-                CDATASection cdata = doc.createCDATASection(" " + err.getCondition() + " ");
+                CDATASection cdata = doc.createCDATASection(" " + err.getCondition().getExpression() + " ");
                 condEle.appendChild(cdata);
                 errEle.appendChild(condEle);
             }

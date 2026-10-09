@@ -162,4 +162,29 @@ public class FaultTolerantSchemeBoardTest {
         // Se kich hoat missing_prescription va treo goal follow_therapy
         assertTrue("Goal follow_therapy should be suspended", board.isGoalSuspended("follow_therapy"));
     }
+
+    @Test
+    public void testConditionSpecClass() {
+        moise.os.fs.ConditionSpec cond = new moise.os.fs.ConditionSpec("symptoms_cleared(P, D) & D < 5");
+        assertEquals("symptoms_cleared(P, D) & D < 5", cond.getExpression());
+        assertEquals("symptoms_cleared(P, D) & D < 5", cond.getValue());
+        assertTrue(cond.isDefined());
+        assertFalse(cond.isEmpty());
+        assertTrue(cond.contains("symptoms_cleared"));
+
+        cond.setExpression("  test_formula  ");
+        assertEquals("test_formula", cond.trim());
+
+        moise.os.fs.ConditionSpec emptyCond = new moise.os.fs.ConditionSpec();
+        assertTrue(emptyCond.isEmpty());
+        assertFalse(emptyCond.isDefined());
+
+        ErrorSpec err = new ErrorSpec("err_test");
+        err.setCondition(cond);
+        assertSame(cond, err.getCondition());
+        assertEquals("test_formula", err.getCondition().trim());
+
+        err.setCondition("q(Y)");
+        assertEquals("q(Y)", err.getCondition().getExpression());
+    }
 }

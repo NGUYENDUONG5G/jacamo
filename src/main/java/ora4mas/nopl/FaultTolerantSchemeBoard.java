@@ -11,6 +11,7 @@ import jason.asSyntax.NumberTerm;
 import jason.asSyntax.PredicateIndicator;
 import jason.asSyntax.StringTerm;
 import jason.asSyntax.Term;
+import jason.asSyntax.VarTerm;
 import jason.bb.BeliefBase;
 import jason.bb.DefaultBeliefBase;
 import jason.infra.local.LocalAgArch;
@@ -22,6 +23,7 @@ import java.util.*;
 import java.util.logging.Logger;
 
 import moise.os.fs.ArgumentSpec;
+import moise.os.fs.ConditionSpec;
 import moise.os.fs.ErrorSpec;
 import moise.os.fs.Failure;
 import moise.xml.FaultTolerantXMLReader;
@@ -237,12 +239,13 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             }
 
             for (ErrorSpec error : f.getErrors()) {
-                if (error.getCondition() == null || error.getCondition().trim().isEmpty()) {
+                ConditionSpec cond = error.getCondition();
+                if (cond == null || cond.isEmpty()) {
                     continue;
                 }
 
                 try {
-                    LogicalFormula formula = ASSyntax.parseFormula(error.getCondition());
+                    LogicalFormula formula = ASSyntax.parseFormula(cond.getExpression());
                     Iterator<Unifier> unifs = formula.logicalConsequence(evalAgent, new Unifier());
                     if (unifs != null && unifs.hasNext()) {
                         Unifier unif = unifs.next();
@@ -256,14 +259,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
     }
 
-    /**
-     * Resolves the value of an argument specification:
-     * 1. Looks into the agent's belief base for a belief matching functor = id and arity = arity (e.g. delivery_address(..)).
-     * 2. If arity == 1: extracts the single parameter inside the parentheses.
-     *    If arity > 1: extracts the list of parameters inside the parentheses.
-     *    If arity == 0: returns the functor.
-     * 3. Fallback: checks condition unifier or returns the argument id.
-     */
+  
     public Object resolveArgumentValue(ArgumentSpec argSpec, Unifier unif) {
         String id = argSpec.getId();
         int arity = argSpec.getArity();
@@ -277,18 +273,59 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
 
         if (unif != null) {
-            Term val = unif.get(id);
-            if (val == null && id.length() > 0) {
+            Term val = null;
+
+           
+            if (id != null && !id.isEmpty()) {
                 String capitalized = Character.toUpperCase(id.charAt(0)) + (id.length() > 1 ? id.substring(1) : "");
                 val = unif.get(capitalized);
             }
-            if (val == null && id.contains("_")) {
-                String prefix = id.substring(0, id.indexOf('_'));
-                val = unif.get(prefix);
+
+           
+            if (val == null && id != null) {
+                String idLower = id.toLowerCase();
+                String[] tokens = idLower.split("_");
+
+          
+                for (VarTerm vt : unif) {
+                    String vName = vt.getFunctor();
+                    if (vName != null && vName.equalsIgnoreCase(id)) {
+                        val = unif.get(vt);
+                        break;
+                    }
+                }
+
+               
                 if (val == null) {
-                    val = unif.get(Character.toUpperCase(prefix.charAt(0)) + prefix.substring(1));
+                    for (VarTerm vt : unif) {
+                        String vName = vt.getFunctor();
+                        if (vName == null) continue;
+                        String vNameLower = vName.toLowerCase();
+
+                        for (String token : tokens) {
+                            if (!token.isEmpty() && !token.equals("id") && token.equalsIgnoreCase(vNameLower)) {
+                                val = unif.get(vt);
+                                break;
+                            }
+                        }
+                        if (val != null) break;
+                    }
+                }
+
+             
+                if (val == null) {
+                    for (VarTerm vt : unif) {
+                        String vName = vt.getFunctor();
+                        if (vName == null) continue;
+                        String vNameLower = vName.toLowerCase();
+                        if (idLower.contains(vNameLower) || vNameLower.contains(idLower)) {
+                            val = unif.get(vt);
+                            break;
+                        }
+                    }
                 }
             }
+
             if (val != null) {
                 Object termVal = extractTermValue(val);
                 logger.info("Resolved argument '" + id + "' from condition unifier: " + val + " -> " + termVal);

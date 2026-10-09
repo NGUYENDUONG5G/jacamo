@@ -10,7 +10,7 @@ public class ErrorSpec implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String id;
-    private String condition;
+    private ConditionSpec condition;
     private List<ArgumentSpec> arguments = new ArrayList<>();
     private RecoveryAct recoveryAct;
 
@@ -29,12 +29,20 @@ public class ErrorSpec implements Serializable {
         this.id = id;
     }
 
-    public String getCondition() {
+    public ConditionSpec getCondition() {
         return condition;
     }
 
-    public void setCondition(String condition) {
+    public void setCondition(ConditionSpec condition) {
         this.condition = condition;
+    }
+
+    public void setCondition(String condition) {
+        this.condition = (condition != null) ? new ConditionSpec(condition) : null;
+    }
+
+    public String getConditionString() {
+        return condition != null ? condition.getExpression() : null;
     }
 
     public List<ArgumentSpec> getArguments() {
