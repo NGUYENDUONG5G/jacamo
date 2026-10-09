@@ -2,15 +2,24 @@ package ora4mas.nopl;
 
 import cartago.OPERATION;
 import cartago.OpFeedbackParam;
+import jason.asSemantics.ActionExec;
 import jason.asSemantics.Agent;
+import jason.asSemantics.Circumstance;
+import jason.asSemantics.Event;
+import jason.asSemantics.IntendedMeans;
+import jason.asSemantics.Intention;
+import jason.asSemantics.TransitionSystem;
 import jason.asSemantics.Unifier;
 import jason.asSyntax.ASSyntax;
+import jason.asSyntax.Atom;
+import jason.asSyntax.ListTerm;
 import jason.asSyntax.Literal;
 import jason.asSyntax.LogicalFormula;
 import jason.asSyntax.NumberTerm;
 import jason.asSyntax.PredicateIndicator;
 import jason.asSyntax.StringTerm;
 import jason.asSyntax.Term;
+import jason.asSyntax.Trigger;
 import jason.asSyntax.VarTerm;
 import jason.bb.BeliefBase;
 import jason.bb.DefaultBeliefBase;
@@ -42,6 +51,9 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     protected Map<String, Agent> registeredAgents = new LinkedHashMap<>();
     protected Map<String, BeliefBase> registeredBeliefBases = new LinkedHashMap<>();
     protected String lastCallingAgent = null;
+
+
+    protected Map<String, Set<String>> suspendedAgentGoals = new LinkedHashMap<>();
 
     {
         evalAgent.initAg();
@@ -463,7 +475,11 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
         logger.severe("FAILURE DETECTED for goal '" + goalId + "' with error '" + error.getId() + "'. Args: " + resolvedArgs);
 
+    
+        suspendJasonGoal(goalId);
+
         safeDefineObsProperty("goalSuspended", goalId, error.getId());
+        safeDefineObsProperty("recoveryState", goalId, "active");
         safeSignal("org_error", goalId, error.getId(), resolvedArgs.toArray());
 
         if (error.getRecoveryAct() != null) {
@@ -479,21 +495,424 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     }
 
     @OPERATION
+    public void suspendGoal(String goalId) {
+        suspendedGoals.add(goalId);
+        suspendJasonGoal(goalId);
+        logger.info("Goal '" + goalId + "' has been proactively SUSPENDED (scheme and Jason intentions).");
+        safeDefineObsProperty("goalSuspended", goalId, "proactive_suspension");
+        safeDefineObsProperty("recoveryState", goalId, "active");
+        safeSignal("goal_suspended", goalId);
+    }
+
+    @OPERATION
+    public void suspendGoal(String agName, String goalId) {
+        suspendedGoals.add(goalId);
+        suspendJasonGoal(agName, goalId);
+        logger.info("Goal '" + goalId + "' for agent '" + agName + "' has been proactively SUSPENDED.");
+        safeDefineObsProperty("goalSuspended", goalId, "proactive_suspension");
+        safeDefineObsProperty("recoveryState", goalId, "active");
+        safeSignal("goal_suspended", goalId, agName);
+    }
+
+    @OPERATION
+    public void suspendJasonGoal(String agName, String goalId) {
+        Agent ag = getAgentByName(agName);
+        if (ag != null) {
+            boolean done = suspendJasonGoalForAgent(ag, goalId);
+            if (done) {
+                suspendedAgentGoals.computeIfAbsent(goalId, k -> new HashSet<>()).add(agName);
+                logger.info("Actively suspended Jason goal '" + goalId + "' for agent '" + agName + "'.");
+                safeSignal("jason_goal_suspended", agName, goalId);
+            }
+        } else {
+            logger.warning("Cannot suspend Jason goal '" + goalId + "': Agent '" + agName + "' not found.");
+        }
+    }
+
+    @OPERATION
+    public void suspendJasonGoal(String goalId) {
+        Set<String> affected = new HashSet<>();
+
+        
+        for (String agName : getAgentsCommittedToGoal(goalId)) {
+            Agent ag = getAgentByName(agName);
+            if (ag != null && suspendJasonGoalForAgent(ag, goalId)) {
+                affected.add(agName);
+            }
+        }
+
+        
+        if (lastCallingAgent != null) {
+            Agent callerAg = getAgentByName(lastCallingAgent);
+            if (callerAg != null && agentHasGoal(callerAg, goalId)) {
+                if (suspendJasonGoalForAgent(callerAg, goalId)) {
+                    affected.add(lastCallingAgent);
+                }
+            }
+        }
+
+       
+        for (Map.Entry<String, Agent> entry : getAllAvailableAgents().entrySet()) {
+            Agent ag = entry.getValue();
+            if (agentHasGoal(ag, goalId)) {
+                if (suspendJasonGoalForAgent(ag, goalId)) {
+                    affected.add(entry.getKey());
+                }
+            }
+        }
+
+        if (!affected.isEmpty()) {
+            suspendedAgentGoals.computeIfAbsent(goalId, k -> new HashSet<>()).addAll(affected);
+            logger.info("Actively suspended Jason goal '" + goalId + "' for agents: " + affected);
+            for (String agName : affected) {
+                safeSignal("jason_goal_suspended", agName, goalId);
+            }
+        } else {
+            logger.info("No active Jason intentions found to suspend for goal '" + goalId + "'.");
+        }
+    }
+
+    @OPERATION
     public void resumeGoal(String goalId) {
-        if (suspendedGoals.remove(goalId)) {
-            logger.info("Goal '" + goalId + "' has been RESUMED from suspension.");
+        boolean wasSuspended = suspendedGoals.remove(goalId);
+        resumeJasonGoal(goalId);
+        if (wasSuspended || !isJasonGoalSuspended(goalId)) {
+            logger.info("Goal '" + goalId + "' has been RESUMED from suspension (scheme and Jason intentions).");
             safeRemoveObsProperty("goalSuspended");
+            safeRemoveObsProperty("recoveryState");
             safeDefineObsProperty("goalResumed", goalId);
             safeSignal("goal_resumed", goalId);
         }
     }
 
     @OPERATION
+    public void resumeGoal(String agName, String goalId) {
+        resumeJasonGoal(agName, goalId);
+        Set<String> ags = suspendedAgentGoals.get(goalId);
+        if (ags == null || ags.isEmpty()) {
+            suspendedGoals.remove(goalId);
+            safeRemoveObsProperty("goalSuspended");
+            safeRemoveObsProperty("recoveryState");
+            safeDefineObsProperty("goalResumed", goalId);
+            safeSignal("goal_resumed", goalId);
+        } else {
+            safeSignal("goal_resumed", goalId, agName);
+        }
+    }
+
+    @OPERATION
+    public void resumeJasonGoal(String agName, String goalId) {
+        Agent ag = getAgentByName(agName);
+        if (ag != null) {
+            boolean done = resumeJasonGoalForAgent(ag, goalId);
+            if (done) {
+                Set<String> set = suspendedAgentGoals.get(goalId);
+                if (set != null) {
+                    set.remove(agName);
+                    if (set.isEmpty()) suspendedAgentGoals.remove(goalId);
+                }
+                logger.info("Actively resumed Jason goal '" + goalId + "' for agent '" + agName + "'.");
+                safeSignal("jason_goal_resumed", agName, goalId);
+            }
+        } else {
+            logger.warning("Cannot resume Jason goal '" + goalId + "': Agent '" + agName + "' not found.");
+        }
+    }
+
+    @OPERATION
+    public void resumeJasonGoal(String goalId) {
+        Set<String> targetAgents = new HashSet<>();
+        Set<String> recorded = suspendedAgentGoals.get(goalId);
+        if (recorded != null) {
+            targetAgents.addAll(recorded);
+        }
+        targetAgents.addAll(getAgentsCommittedToGoal(goalId));
+        for (Map.Entry<String, Agent> entry : getAllAvailableAgents().entrySet()) {
+            if (isJasonGoalSuspended(entry.getKey(), goalId)) {
+                targetAgents.add(entry.getKey());
+            }
+        }
+
+        Set<String> resumedAgents = new HashSet<>();
+        for (String agName : targetAgents) {
+            Agent ag = getAgentByName(agName);
+            if (ag != null && resumeJasonGoalForAgent(ag, goalId)) {
+                resumedAgents.add(agName);
+            }
+        }
+
+        suspendedAgentGoals.remove(goalId);
+        if (!resumedAgents.isEmpty()) {
+            logger.info("Actively resumed Jason goal '" + goalId + "' for agents: " + resumedAgents);
+            for (String agName : resumedAgents) {
+                safeSignal("jason_goal_resumed", agName, goalId);
+            }
+        }
+    }
+
+    public boolean suspendJasonGoalForAgent(Agent ag, String goalId) {
+        if (ag == null || ag.getTS() == null || goalId == null) return false;
+        TransitionSystem ts = ag.getTS();
+        Circumstance c = ts.getC();
+        boolean suspended = false;
+
+        // 1. Jason standard suspend internal action
+        try {
+            Literal gLit = ASSyntax.parseLiteral(goalId);
+            Object res = new jason.stdlib.suspend().execute(ts, new Unifier(), new Term[] { gLit });
+            if (Boolean.TRUE.equals(res)) {
+                suspended = true;
+            }
+        } catch (Exception e) {
+            logger.fine("jason.stdlib.suspend error: " + e.getMessage());
+        }
+
+        
+        Atom reason = ASSyntax.createAtom("org_recovery");
+        synchronized (c) {
+            try {
+                
+                for (Intention i : new ArrayList<>(c.getRunningIntentions())) {
+                    if (matchesGoalFunctor(i, goalId) && !i.isSuspended()) {
+                        i.setSuspended(true);
+                        c.removeRunningIntention(i);
+                        c.addPendingIntention("suspended-" + i.getId(), reason, i, true);
+                        suspended = true;
+                    }
+                }
+                
+                for (ActionExec act : new ArrayList<>(c.getPendingActions().values())) {
+                    Intention i = act.getIntention();
+                    if (i != null && matchesGoalFunctor(i, goalId) && !i.isSuspended()) {
+                        i.setSuspended(true);
+                        c.addPendingIntention("suspended-" + i.getId(), reason, i, true);
+                        suspended = true;
+                    }
+                }
+                
+                Intention sel = c.getSelectedIntention();
+                if (sel != null && matchesGoalFunctor(sel, goalId) && !sel.isSuspended()) {
+                    sel.setSuspended(true);
+                    c.addPendingIntention("suspended-self-" + sel.getId(), reason, sel, true);
+                    suspended = true;
+                }
+                
+                for (Event ev : new ArrayList<>(c.getEvents())) {
+                    Trigger tr = ev.getTrigger();
+                    boolean match = (tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor()));
+                    if (!match && ev.getIntention() != null) {
+                        match = matchesGoalFunctor(ev.getIntention(), goalId);
+                    }
+                    if (match) {
+                        c.removeEvent(ev);
+                        c.addPendingEvent("suspended-" + ev.getTrigger() + (ev.getIntention() != null ? ev.getIntention().getId() : "0"), reason, ev);
+                        if (ev.getIntention() != null) {
+                            ev.getIntention().setSuspended(true);
+                        }
+                        suspended = true;
+                    }
+                }
+            } catch (Exception e) {
+                logger.warning("Error during intention suspension for goal " + goalId + ": " + e.getMessage());
+            }
+        }
+        return suspended;
+    }
+
+    public boolean resumeJasonGoalForAgent(Agent ag, String goalId) {
+        if (ag == null || ag.getTS() == null || goalId == null) return false;
+        TransitionSystem ts = ag.getTS();
+        Circumstance c = ts.getC();
+        boolean resumed = false;
+
+        
+        try {
+            Literal gLit = ASSyntax.parseLiteral(goalId);
+            Object res = new jason.stdlib.resume().execute(ts, new Unifier(), new Term[] { gLit });
+            if (Boolean.TRUE.equals(res)) {
+                resumed = true;
+            }
+        } catch (Exception e) {
+            logger.fine("jason.stdlib.resume error: " + e.getMessage());
+        }
+
+        
+        synchronized (c) {
+            try {
+                
+                for (Map.Entry<String, Intention> entry : new ArrayList<>(c.getPendingIntentions().entrySet())) {
+                    String key = entry.getKey();
+                    if (key.startsWith("suspended-")) {
+                        Intention i = entry.getValue();
+                        if (matchesGoalFunctor(i, goalId)) {
+                            c.removePendingIntention(key);
+                            c.resumeIntention(i, null);
+                            i.setSuspended(false);
+                            resumed = true;
+                        }
+                    }
+                }
+
+               
+                for (Map.Entry<String, Event> entry : new ArrayList<>(c.getPendingEvents().entrySet())) {
+                    String key = entry.getKey();
+                    if (key.startsWith("suspended-")) {
+                        Event ev = entry.getValue();
+                        Trigger tr = ev.getTrigger();
+                        boolean match = (tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor()));
+                        if (!match && ev.getIntention() != null) {
+                            match = matchesGoalFunctor(ev.getIntention(), goalId);
+                        }
+                        if (match) {
+                            c.removePendingEvent(key);
+                            c.addEvent(ev);
+                            if (ev.getIntention() != null) {
+                                ev.getIntention().setSuspended(false);
+                            }
+                            resumed = true;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warning("Error during intention resume for goal " + goalId + ": " + e.getMessage());
+            }
+        }
+        return resumed;
+    }
+
+    protected boolean matchesGoalFunctor(Intention i, String goalId) {
+        if (i == null || goalId == null) return false;
+        try {
+            for (IntendedMeans im : i) {
+                Trigger tr = im.getTrigger();
+                if (tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor())) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    public boolean agentHasGoal(Agent ag, String goalId) {
+        if (ag == null || ag.getTS() == null || goalId == null) return false;
+        try {
+            Circumstance c = ag.getTS().getC();
+            Trigger g = new Trigger(Trigger.TEOperator.add, Trigger.TEType.achieve, ASSyntax.parseLiteral(goalId));
+            Unifier u = new Unifier();
+
+            synchronized (c) {
+                
+                for (Intention i : new ArrayList<>(c.getRunningIntentions())) {
+                    if (i.hasTrigger(g, u) || matchesGoalFunctor(i, goalId)) return true;
+                }
+                
+                for (ActionExec act : new ArrayList<>(c.getPendingActions().values())) {
+                    if (act.getIntention() != null && (act.getIntention().hasTrigger(g, u) || matchesGoalFunctor(act.getIntention(), goalId))) return true;
+                }
+               
+                if (c.getSelectedIntention() != null && (c.getSelectedIntention().hasTrigger(g, u) || matchesGoalFunctor(c.getSelectedIntention(), goalId))) return true;
+              
+                for (Event ev : new ArrayList<>(c.getEvents())) {
+                    if (u.unifies(g, ev.getTrigger()) || (ev.getIntention() != null && (ev.getIntention().hasTrigger(g, u) || matchesGoalFunctor(ev.getIntention(), goalId)))) return true;
+                }
+                
+                for (Intention i : new ArrayList<>(c.getPendingIntentions().values())) {
+                    if (i.hasTrigger(g, u) || matchesGoalFunctor(i, goalId)) return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    public List<String> getAgentsCommittedToGoal(String goalId) {
+        List<String> list = new ArrayList<>();
+        try {
+            if (getSpec() != null && getSchState() != null) {
+                moise.os.fs.Goal g = getSpec().getGoal(goalId);
+                if (g != null) {
+                    ListTerm ags = getSchState().getCommittedAgents(g);
+                    if (ags != null) {
+                        for (Term t : ags) {
+                            if (t.isAtom() || t.isString()) {
+                                String agName = t.isString() ? ((StringTerm) t).getString() : t.toString();
+                                list.add(agName);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.fine("Could not get committed agents for goal " + goalId + ": " + e.getMessage());
+        }
+        return list;
+    }
+
+    public Map<String, Agent> getAllAvailableAgents() {
+        Map<String, Agent> all = new LinkedHashMap<>(registeredAgents);
+        try {
+            if (RunLocalMAS.getRunner() != null) {
+                Map<String, LocalAgArch> masAgs = RunLocalMAS.getRunner().getAgs();
+                if (masAgs != null) {
+                    for (Map.Entry<String, LocalAgArch> entry : masAgs.entrySet()) {
+                        if (entry.getValue() != null && entry.getValue().getTS() != null && entry.getValue().getTS().getAg() != null) {
+                            all.putIfAbsent(entry.getKey(), entry.getValue().getTS().getAg());
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return all;
+    }
+
+    public boolean isJasonGoalSuspended(String agName, String goalId) {
+        Agent ag = getAgentByName(agName);
+        if (ag == null || ag.getTS() == null || goalId == null) return false;
+        Circumstance c = ag.getTS().getC();
+        synchronized (c) {
+            for (Map.Entry<String, Intention> entry : c.getPendingIntentions().entrySet()) {
+                if (entry.getKey().startsWith("suspended-") && matchesGoalFunctor(entry.getValue(), goalId)) {
+                    return true;
+                }
+            }
+            for (Map.Entry<String, Event> entry : c.getPendingEvents().entrySet()) {
+                if (entry.getKey().startsWith("suspended-")) {
+                    Event ev = entry.getValue();
+                    Trigger tr = ev.getTrigger();
+                    if ((tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor()))
+                            || (ev.getIntention() != null && matchesGoalFunctor(ev.getIntention(), goalId))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean isJasonGoalSuspended(String goalId) {
+        Set<String> ags = suspendedAgentGoals.get(goalId);
+        if (ags != null && !ags.isEmpty()) {
+            for (String agName : ags) {
+                if (isJasonGoalSuspended(agName, goalId)) return true;
+            }
+        }
+        for (Map.Entry<String, Agent> entry : getAllAvailableAgents().entrySet()) {
+            if (isJasonGoalSuspended(entry.getKey(), goalId)) return true;
+        }
+        return false;
+    }
+
+    public boolean isInRecovery(String goalId) {
+        return suspendedGoals.contains(goalId);
+    }
+
+    @OPERATION
     public void failGoal(String goalId) {
         suspendedGoals.remove(goalId);
         failedGoals.add(goalId);
+        suspendedAgentGoals.remove(goalId);
         logger.severe("Goal '" + goalId + "' has been marked as FAILED.");
         safeRemoveObsProperty("goalSuspended");
+        safeRemoveObsProperty("recoveryState");
         safeDefineObsProperty("goalFailed", goalId);
         safeSignal("goal_failed", goalId);
     }

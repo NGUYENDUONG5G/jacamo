@@ -187,4 +187,136 @@ public class FaultTolerantSchemeBoardTest {
         err.setCondition("q(Y)");
         assertEquals("q(Y)", err.getCondition().getExpression());
     }
+
+    @Test
+    public void testTriggerUnification() throws Exception {
+        jason.asSyntax.Trigger t1 = jason.asSyntax.ASSyntax.parseTrigger("+!follow_therapy");
+        jason.asSyntax.Trigger t2 = jason.asSyntax.ASSyntax.parseTrigger("+!follow_therapy[scheme(Sch)]");
+        jason.asSemantics.Unifier u = new jason.asSemantics.Unifier();
+        boolean res = u.unifies(t1, t2);
+        System.out.println("t1 unifies t2: " + res);
+        assertTrue(res);
+    }
+
+    @Test
+    public void testAgentGoalSuspensionAndResume() throws Exception {
+        jason.asSemantics.Agent ag = new jason.asSemantics.Agent();
+        ag.initAg();
+        jason.asSemantics.TransitionSystem ts = new jason.asSemantics.TransitionSystem(ag, new jason.asSemantics.Circumstance(), null, new jason.infra.local.LocalAgArch());
+        ag.setTS(ts);
+
+        // Tao mot intention voi trigger +!follow_therapy[scheme(main_sch)]
+        jason.asSemantics.Intention intention = new jason.asSemantics.Intention();
+        jason.asSyntax.Plan plan = jason.asSyntax.ASSyntax.parsePlan("+!follow_therapy[scheme(Sch)] <- .wait(1000).");
+        jason.asSemantics.IntendedMeans im = new jason.asSemantics.IntendedMeans(new jason.asSemantics.Option(plan, new jason.asSemantics.Unifier()), jason.asSyntax.ASSyntax.parseTrigger("+!follow_therapy[scheme(main_sch)]"));
+        intention.push(im);
+
+        ts.getC().addRunningIntention(intention);
+        assertEquals(1, ts.getC().getNbRunningIntentions());
+        assertTrue(ts.getC().getPendingIntentions().isEmpty());
+
+        // Suspend
+        jason.asSyntax.Literal gLit = jason.asSyntax.ASSyntax.parseLiteral("follow_therapy");
+        new jason.stdlib.suspend().execute(ts, new jason.asSemantics.Unifier(), new jason.asSyntax.Term[] { gLit });
+
+        assertEquals(0, ts.getC().getNbRunningIntentions());
+        assertFalse(ts.getC().getPendingIntentions().isEmpty());
+
+        // Resume
+        new jason.stdlib.resume().execute(ts, new jason.asSemantics.Unifier(), new jason.asSyntax.Term[] { gLit });
+        assertEquals(1, ts.getC().getNbRunningIntentions());
+        assertTrue(ts.getC().getPendingIntentions().isEmpty());
+    }
+
+    @Test
+    public void testProactiveAndActiveBoardGoalSuspension() throws Exception {
+        FaultTolerantSchemeBoard board = new FaultTolerantSchemeBoard();
+
+        // 1. Setup mock agent with an active intention for follow_therapy
+        jason.asSemantics.Agent patient = new jason.asSemantics.Agent();
+        patient.initAg();
+        jason.asSemantics.TransitionSystem ts = new jason.asSemantics.TransitionSystem(patient, new jason.asSemantics.Circumstance(), null, new jason.infra.local.LocalAgArch());
+        patient.setTS(ts);
+
+        jason.asSemantics.Intention intention = new jason.asSemantics.Intention();
+        jason.asSyntax.Plan plan = jason.asSyntax.ASSyntax.parsePlan("+!follow_therapy[scheme(main_sch)] <- .wait(1000).");
+        jason.asSemantics.IntendedMeans im = new jason.asSemantics.IntendedMeans(
+            new jason.asSemantics.Option(plan, new jason.asSemantics.Unifier()),
+            jason.asSyntax.ASSyntax.parseTrigger("+!follow_therapy[scheme(main_sch)]")
+        );
+        intention.push(im);
+        ts.getC().addRunningIntention(intention);
+
+        board.registerAgent("alice_patient", patient);
+
+        assertEquals(1, ts.getC().getNbRunningIntentions());
+        assertFalse(board.isGoalSuspended("follow_therapy"));
+        assertFalse(board.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+
+        // 2. Active suspension via board operation
+        board.suspendGoal("alice_patient", "follow_therapy");
+
+        assertTrue("Organizational goal should be suspended", board.isGoalSuspended("follow_therapy"));
+        assertTrue("Jason goal for alice_patient should be suspended", board.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+        assertEquals("Running intentions should be empty", 0, ts.getC().getNbRunningIntentions());
+        assertTrue("Board should be in recovery for this goal", board.isInRecovery("follow_therapy"));
+
+        // 3. Active resume via board operation
+        board.resumeGoal("alice_patient", "follow_therapy");
+
+        assertFalse("Organizational goal should be resumed", board.isGoalSuspended("follow_therapy"));
+        assertFalse("Jason goal should be resumed", board.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+        assertEquals("Running intentions should be restored", 1, ts.getC().getNbRunningIntentions());
+        assertFalse("Recovery should no longer be active", board.isInRecovery("follow_therapy"));
+    }
+
+    @Test
+    public void testAutomaticProactiveSuspensionOnErrorDetection() throws Exception {
+        File file = new File("sample_org.xml");
+        Map<String, List<Failure>> failuresByScheme = FaultTolerantXMLReader.parseFailuresFromFile(file);
+
+        FaultTolerantSchemeBoard board = new FaultTolerantSchemeBoard();
+        for (Failure f : failuresByScheme.get("therapy_sch")) {
+            board.addFailureSpec(f);
+        }
+
+        // Setup agent with running intention
+        jason.asSemantics.Agent patient = new jason.asSemantics.Agent();
+        patient.initAg();
+        jason.asSemantics.TransitionSystem ts = new jason.asSemantics.TransitionSystem(patient, new jason.asSemantics.Circumstance(), null, new jason.infra.local.LocalAgArch());
+        patient.setTS(ts);
+
+        jason.asSemantics.Intention intention = new jason.asSemantics.Intention();
+        jason.asSyntax.Plan plan = jason.asSyntax.ASSyntax.parsePlan("+!follow_therapy[scheme(therapy_sch)] <- .wait(1000).");
+        jason.asSemantics.IntendedMeans im = new jason.asSemantics.IntendedMeans(
+            new jason.asSemantics.Option(plan, new jason.asSemantics.Unifier()),
+            jason.asSyntax.ASSyntax.parseTrigger("+!follow_therapy[scheme(therapy_sch)]")
+        );
+        intention.push(im);
+        ts.getC().addRunningIntention(intention);
+
+        board.registerAgent("alice_patient", patient);
+
+        assertEquals(1, ts.getC().getNbRunningIntentions());
+        assertFalse(board.isGoalSuspended("follow_therapy"));
+
+        // Kich hoat loi lost_symptoms bang updateOrgBelief:
+        // Day 3 < 5 -> condition TRUE -> triggers handleError
+        board.updateOrgBelief("symptoms_cleared(alice, 3)");
+
+        assertTrue("Goal follow_therapy should be suspended on board", board.isGoalSuspended("follow_therapy"));
+        assertTrue("Jason goal for alice should be proactively suspended", board.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+        assertEquals("Running intentions should be 0", 0, ts.getC().getNbRunningIntentions());
+        assertTrue("Should be in recovery state", board.isInRecovery("follow_therapy"));
+
+        // Khi recovery xong, goi resumeGoal
+        board.resumeGoal("follow_therapy");
+
+        assertFalse("Goal should be resumed on board", board.isGoalSuspended("follow_therapy"));
+        assertFalse("Jason goal should be resumed", board.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+        assertEquals("Running intentions should be restored to 1", 1, ts.getC().getNbRunningIntentions());
+    }
 }
+
+
+
