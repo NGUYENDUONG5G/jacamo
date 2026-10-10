@@ -5,5 +5,4 @@
 
 // Thuc hien muc tieu boc thuoc (fill_prescription)
 +!fill_prescription[scheme(Sch)] <-
-    .wait(1000);
-    goalAchieved(fill_prescription).
+    .wait(1000).

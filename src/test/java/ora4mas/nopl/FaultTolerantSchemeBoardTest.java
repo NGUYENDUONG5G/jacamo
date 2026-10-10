@@ -316,6 +316,60 @@ public class FaultTolerantSchemeBoardTest {
         assertFalse("Jason goal should be resumed", board.isJasonGoalSuspended("alice_patient", "follow_therapy"));
         assertEquals("Running intentions should be restored to 1", 1, ts.getC().getNbRunningIntentions());
     }
+
+    @Test
+    public void testAutomaticResumeOnRecoveryCompletion() throws Exception {
+        FaultTolerantSchemeBoard.clearPendingRecoveries();
+
+        File file = new File("sample_org.xml");
+        Map<String, List<Failure>> failuresByScheme = FaultTolerantXMLReader.parseFailuresFromFile(file);
+
+        FaultTolerantSchemeBoard mainBoard = new FaultTolerantSchemeBoard();
+        mainBoard.setSchemeType("therapy_sch");
+        for (Failure f : failuresByScheme.get("therapy_sch")) {
+            mainBoard.addFailureSpec(f);
+        }
+
+        // Setup Alice intention
+        jason.asSemantics.Agent patient = new jason.asSemantics.Agent();
+        patient.initAg();
+        jason.asSemantics.TransitionSystem ts = new jason.asSemantics.TransitionSystem(patient, new jason.asSemantics.Circumstance(), null, new jason.infra.local.LocalAgArch());
+        patient.setTS(ts);
+
+        jason.asSemantics.Intention intention = new jason.asSemantics.Intention();
+        jason.asSyntax.Plan plan = jason.asSyntax.ASSyntax.parsePlan("+!follow_therapy[scheme(therapy_sch)] <- .wait(1000).");
+        jason.asSemantics.IntendedMeans im = new jason.asSemantics.IntendedMeans(
+            new jason.asSemantics.Option(plan, new jason.asSemantics.Unifier()),
+            jason.asSyntax.ASSyntax.parseTrigger("+!follow_therapy[scheme(therapy_sch)]")
+        );
+        intention.push(im);
+        ts.getC().addRunningIntention(intention);
+
+        mainBoard.registerAgent("alice_patient", patient);
+
+        // Kich hoat loi
+        mainBoard.updateOrgBelief("symptoms_cleared(alice, 3)");
+
+        assertTrue("Goal follow_therapy should be suspended", mainBoard.isGoalSuspended("follow_therapy"));
+        assertTrue("Alice intention should be suspended", mainBoard.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+        assertEquals(0, ts.getC().getNbRunningIntentions());
+        assertTrue("reconsult_scheme should be pending recovery", FaultTolerantSchemeBoard.hasPendingRecovery("reconsult_scheme"));
+
+        // Tao recovery scheme board dai dien cho reconsult_scheme
+        FaultTolerantSchemeBoard recoveryBoard = new FaultTolerantSchemeBoard();
+        recoveryBoard.setSchemeType("reconsult_scheme");
+
+        // Doctor hoan tat cac muc tieu recovery tren recoveryBoard
+        recoveryBoard.goalAchieved("review_symptoms");
+        // Goal chua xong hoan toan neu chi review_symptoms, hoac neu adjust_therapy la goal cuoi
+        recoveryBoard.goalAchieved("adjust_therapy");
+
+        // KIEM TRA: Main board phai TU DONG RESUME ma KHONG CAN goi resumeGoal thu cong!
+        assertFalse("Goal follow_therapy should be AUTOMATICALLY resumed on main board", mainBoard.isGoalSuspended("follow_therapy"));
+        assertFalse("Alice jason goal should be AUTOMATICALLY resumed", mainBoard.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+        assertEquals("Running intentions should be restored to 1", 1, ts.getC().getNbRunningIntentions());
+        assertFalse("reconsult_scheme pending recovery should be cleared", FaultTolerantSchemeBoard.hasPendingRecovery("reconsult_scheme"));
+    }
 }
 
 

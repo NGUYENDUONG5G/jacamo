@@ -5,11 +5,11 @@
 
 // Thuc hien muc tieu ke don thuoc (prescribe)
 +!prescribe[scheme(Sch)] <-
-    .wait(1000);
-    goalAchieved(prescribe).
+    .wait(1000).
 
-// Lang nghe tin hieu yeu cau khoi tao Scheme phuc hoi tu FaultTolerantSchemeBoard
-+recovery_required("reconsult_scheme", FailedGoal, ErrorId, Args) <-
-    .wait(1500);
-    // Phuc hoi Goal cho benh nhan
-    resumeGoal(FailedGoal).
+// Thuc hien cac muc tieu trong quy trinh phuc hoi
++!review_symptoms[scheme(Sch)] <-
+    .wait(1000).
+
++!adjust_therapy[scheme(Sch)] <-
+    .wait(1000).

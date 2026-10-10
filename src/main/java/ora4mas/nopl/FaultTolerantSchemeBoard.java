@@ -29,13 +29,19 @@ import jason.infra.local.RunLocalMAS;
 import java.io.File;
 import java.io.InputStream;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 
+import jason.stdlib.resume;
+import jason.stdlib.suspend;
+import moise.common.MoiseException;
 import moise.os.fs.ArgumentSpec;
 import moise.os.fs.ConditionSpec;
 import moise.os.fs.ErrorSpec;
 import moise.os.fs.Failure;
 import moise.xml.FaultTolerantXMLReader;
+import npl.parser.ParseException;
 
 
 public class FaultTolerantSchemeBoard extends SchemeBoard {
@@ -55,9 +61,47 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
     protected Map<String, Set<String>> suspendedAgentGoals = new LinkedHashMap<>();
 
+    public static class PendingRecovery {
+        private final FaultTolerantSchemeBoard sourceBoard;
+        private final String failedGoalId;
+        private final String recoverySchemeType;
+        private final String errorId;
+
+        public PendingRecovery(FaultTolerantSchemeBoard sourceBoard, String failedGoalId, String recoverySchemeType, String errorId) {
+            this.sourceBoard = sourceBoard;
+            this.failedGoalId = failedGoalId;
+            this.recoverySchemeType = recoverySchemeType;
+            this.errorId = errorId;
+        }
+
+        public FaultTolerantSchemeBoard getSourceBoard() {
+            return sourceBoard;
+        }
+
+        public String getFailedGoalId() {
+            return failedGoalId;
+        }
+
+        public String getRecoverySchemeType() {
+            return recoverySchemeType;
+        }
+
+        public String getErrorId() {
+            return errorId;
+        }
+    }
+
+    protected static final CopyOnWriteArrayList<FaultTolerantSchemeBoard> activeBoards = new CopyOnWriteArrayList<>();
+    protected static final Map<String, CopyOnWriteArrayList<PendingRecovery>> pendingRecoveries = new ConcurrentHashMap<>();
+
+    protected String osFile = null;
+    protected String schemeType = null;
+    protected Set<String> achievedGoals = Collections.synchronizedSet(new LinkedHashSet<>());
+
     {
         evalAgent.initAg();
         evalAgent.setBB(boardBeliefBase);
+        activeBoards.add(this);
     }
 
     public FaultTolerantSchemeBoard() {
@@ -65,9 +109,39 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     }
 
     @Override
-    public void init(String osFile, String schType) throws npl.parser.ParseException, moise.common.MoiseException {
+    public void destroy() {
+        activeBoards.remove(this);
+        super.destroy();
+    }
+
+    @Override
+    public void init(String osFile, String schType) throws ParseException, MoiseException {
+        this.osFile = osFile;
+        this.schemeType = schType;
         super.init(osFile, schType);
         loadFailuresFromOS(osFile, schType);
+    }
+
+    public String getSchemeType() {
+        if (schemeType != null) return schemeType;
+        if (getSpec() != null) return getSpec().getId();
+        return null;
+    }
+
+    public void setSchemeType(String schType) {
+        this.schemeType = schType;
+    }
+
+    public Set<String> getAchievedGoals() {
+        return Collections.unmodifiableSet(new LinkedHashSet<>(achievedGoals));
+    }
+
+    public static void clearPendingRecoveries() {
+        pendingRecoveries.clear();
+    }
+
+    public static boolean hasPendingRecovery(String recoverySchemeId) {
+        return pendingRecoveries.containsKey(recoverySchemeId) && !pendingRecoveries.get(recoverySchemeId).isEmpty();
     }
 
     public void registerAgent(String agName, Agent ag) {
@@ -172,7 +246,6 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         f = new File("../src/org", cleanPath);
         if (f.exists()) return f;
 
-        // Try getting just the filename
         String fileName = new File(cleanPath).getName();
         f = new File("src/org", fileName);
         if (f.exists()) return f;
@@ -271,12 +344,12 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
     }
 
-  
+
     public Object resolveArgumentValue(ArgumentSpec argSpec, Unifier unif) {
         String id = argSpec.getId();
         int arity = argSpec.getArity();
 
-     
+
         Literal foundBelief = findBeliefInAgents(id, arity);
         if (foundBelief != null) {
             Object val = extractValueFromLiteral(foundBelief, arity);
@@ -287,18 +360,18 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         if (unif != null) {
             Term val = null;
 
-           
+
             if (id != null && !id.isEmpty()) {
                 String capitalized = Character.toUpperCase(id.charAt(0)) + (id.length() > 1 ? id.substring(1) : "");
                 val = unif.get(capitalized);
             }
 
-           
+
             if (val == null && id != null) {
                 String idLower = id.toLowerCase();
                 String[] tokens = idLower.split("_");
 
-          
+
                 for (VarTerm vt : unif) {
                     String vName = vt.getFunctor();
                     if (vName != null && vName.equalsIgnoreCase(id)) {
@@ -307,7 +380,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                     }
                 }
 
-               
+
                 if (val == null) {
                     for (VarTerm vt : unif) {
                         String vName = vt.getFunctor();
@@ -324,7 +397,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                     }
                 }
 
-             
+
                 if (val == null) {
                     for (VarTerm vt : unif) {
                         String vName = vt.getFunctor();
@@ -475,7 +548,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
         logger.severe("FAILURE DETECTED for goal '" + goalId + "' with error '" + error.getId() + "'. Args: " + resolvedArgs);
 
-    
+
         suspendJasonGoal(goalId);
 
         safeDefineObsProperty("goalSuspended", goalId, error.getId());
@@ -490,8 +563,168 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     }
 
     protected void triggerRecoveryScheme(String recoverySchemeId, String goalId, String errorId, List<Object> args) {
+        PendingRecovery rec = new PendingRecovery(this, goalId, recoverySchemeId, errorId);
+        pendingRecoveries.computeIfAbsent(recoverySchemeId, k -> new CopyOnWriteArrayList<>()).add(rec);
+        logger.info("Registered pending recovery: recovery scheme '" + recoverySchemeId + "' for failed goal '" + goalId + "' (error: " + errorId + ").");
+
+        // Tu dong khoi tao recovery scheme artifact tren he thong
+        autoCreateRecoverySchemeArtifact(recoverySchemeId);
+
         safeSignal("recovery_required", recoverySchemeId, goalId, errorId, args.toArray());
         safeDefineObsProperty("recoverySchemeRequired", recoverySchemeId, goalId);
+    }
+
+    protected void autoCreateRecoverySchemeArtifact(String recoverySchemeId) {
+        boolean created = false;
+        try {
+            Collection<OrgBoard> orgBoards = OrgBoard.getOrbBoards();
+            if (orgBoards != null && !orgBoards.isEmpty()) {
+                for (OrgBoard ob : orgBoards) {
+                    try {
+                        cartago.OpFeedbackParam<cartago.ArtifactId> fb = new cartago.OpFeedbackParam<>();
+                        ob.createScheme(recoverySchemeId, recoverySchemeId, fb);
+                        logger.info("OrgBoard automatically created recovery scheme artifact '" + recoverySchemeId + "'.");
+                        created = true;
+                        break;
+                    } catch (Exception ignored) {}
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        if (!created && this.osFile != null) {
+            try {
+                cartago.ArtifactConfig cfg = new cartago.ArtifactConfig(this.osFile, recoverySchemeId);
+                makeArtifact(recoverySchemeId, "ora4mas.nopl.FaultTolerantSchemeBoard", cfg);
+                logger.info("FaultTolerantSchemeBoard automatically created recovery scheme artifact '" + recoverySchemeId + "' via makeArtifact.");
+                created = true;
+            } catch (Throwable e) {
+                logger.fine("makeArtifact auto creation notice: " + e.getMessage());
+            }
+        }
+
+        if (created) {
+            safeDefineObsProperty("recoverySchemeCreated", recoverySchemeId);
+            safeSignal("recovery_scheme_created", recoverySchemeId);
+
+            // Tu dong lien ket recovery scheme vao GroupBoard de kich hoat Normative Engine (neu co group)
+            try {
+                Collection<GroupBoard> groupBoards = GroupBoard.getGroupBoards();
+                if (groupBoards != null && !groupBoards.isEmpty()) {
+                    for (GroupBoard gb : groupBoards) {
+                        try {
+                            gb.addSchemeWhenFormationOk(recoverySchemeId);
+                            logger.info("GroupBoard automatically linked recovery scheme '" + recoverySchemeId + "'.");
+                        } catch (Exception ignored) {}
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    @OPERATION
+    @Override
+    public void goalAchieved(String goal) {
+        try {
+            super.goalAchieved(goal);
+        } catch (Exception e) {
+            logger.fine("super.goalAchieved notice: " + e.getMessage());
+        }
+        achievedGoals.add(goal);
+        logger.info("Goal achieved on board '" + getSchemeType() + "': " + goal);
+        checkAndResumeOnRecoverySuccess(goal);
+    }
+
+    protected void checkAndResumeOnRecoverySuccess(String achievedGoal) {
+        String currentSch = getSchemeType();
+
+        // TH 1: Board nay la mot Recovery Scheme Board dang duoc cho doi (pending recovery):
+        if (currentSch != null && pendingRecoveries.containsKey(currentSch)) {
+            if (isSchemeCompleted(achievedGoal)) {
+                completeRecoveryForScheme(currentSch);
+                return;
+            }
+        }
+
+        // TH 2: Cac goal cua recovery scheme duoc thuc thi ngay tren board nay:
+        for (Map.Entry<String, CopyOnWriteArrayList<PendingRecovery>> entry : pendingRecoveries.entrySet()) {
+            String recSchType = entry.getKey();
+            for (PendingRecovery rec : entry.getValue()) {
+                if (rec.getSourceBoard() == this) {
+                    if (isRecoveryGoalAchievedOnBoard(recSchType, achievedGoal)) {
+                        completeRecoveryForScheme(recSchType);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    public boolean isSchemeCompleted(String lastGoal) {
+        if (getSpec() != null) {
+            Collection<moise.os.fs.Goal> goals = getSpec().getGoals();
+            if (goals != null && !goals.isEmpty()) {
+                Set<String> leafGoalIds = new HashSet<>();
+                for (moise.os.fs.Goal g : goals) {
+                    if (!g.hasPlan()) {
+                        leafGoalIds.add(g.getId());
+                    }
+                }
+                if (!leafGoalIds.isEmpty()) {
+                    return achievedGoals.containsAll(leafGoalIds);
+                }
+            }
+        }
+        return !achievedGoals.isEmpty();
+    }
+
+    protected boolean isRecoveryGoalAchievedOnBoard(String recSchType, String achievedGoal) {
+        if (getSpec() != null && getSpec().getFS() != null) {
+            moise.os.fs.Scheme recSpec = getSpec().getFS().findScheme(recSchType);
+            if (recSpec != null) {
+                Set<String> leafGoals = new HashSet<>();
+                for (moise.os.fs.Goal g : recSpec.getGoals()) {
+                    if (!g.hasPlan()) {
+                        leafGoals.add(g.getId());
+                    }
+                }
+                if (!leafGoals.isEmpty()) {
+                    return achievedGoals.containsAll(leafGoals);
+                }
+            }
+        }
+        return achievedGoal != null && achievedGoal.contains(recSchType);
+    }
+
+    public void completeRecoveryForScheme(String recSchType) {
+       CopyOnWriteArrayList<PendingRecovery> list = pendingRecoveries.remove(recSchType);
+        if (list != null && !list.isEmpty()) {
+            for (PendingRecovery rec : list) {
+                FaultTolerantSchemeBoard src = rec.getSourceBoard();
+                String failedGoal = rec.getFailedGoalId();
+                logger.info("Recovery scheme '" + recSchType + "' succeeded! Automatically RESUMING failed goal '" + failedGoal + "' on source board.");
+                src.resumeGoal(failedGoal);
+                safeSignal("recovery_succeeded", recSchType, failedGoal);
+                safeDefineObsProperty("recoverySucceeded", recSchType, failedGoal);
+            }
+        }
+    }
+
+    @OPERATION
+    public void recoveryFinished() {
+        String st = getSchemeType();
+        if (st != null) {
+            completeRecoveryForScheme(st);
+        }
+    }
+
+    @OPERATION
+    public void recoveryFinished(String recoverySchemeId) {
+        completeRecoveryForScheme(recoverySchemeId);
+    }
+
+    @OPERATION
+    public void reportRecoverySuccess(String recoverySchemeId) {
+        completeRecoveryForScheme(recoverySchemeId);
     }
 
     @OPERATION
@@ -659,7 +892,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         // 1. Jason standard suspend internal action
         try {
             Literal gLit = ASSyntax.parseLiteral(goalId);
-            Object res = new jason.stdlib.suspend().execute(ts, new Unifier(), new Term[] { gLit });
+            Object res = new suspend().execute(ts, new Unifier(), new Term[] { gLit });
             if (Boolean.TRUE.equals(res)) {
                 suspended = true;
             }
@@ -728,7 +961,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         
         try {
             Literal gLit = ASSyntax.parseLiteral(goalId);
-            Object res = new jason.stdlib.resume().execute(ts, new Unifier(), new Term[] { gLit });
+            Object res = new resume().execute(ts, new Unifier(), new Term[] { gLit });
             if (Boolean.TRUE.equals(res)) {
                 resumed = true;
             }

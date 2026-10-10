@@ -20,9 +20,9 @@ Ví dụ này minh họa cơ chế **Phát hiện lỗi (Failure Detection) và 
   * **Tạm dừng**: Goal `follow_therapy` bị ngắt sang trạng thái `suspended`, Alice tạm dừng uống thuốc.
   * **Kích hoạt phục hồi**: Board phát tín hiệu `recovery_required("reconsult_scheme", ...)`.
 * **Phục hồi (`reconsult_scheme`)**:
-  * Bác sĩ Bob tiếp nhận yêu cầu, tiến hành tái khám và điều chỉnh liều lượng thuốc.
-  * Bác sĩ Bob gọi thao tác `resumeGoal("follow_therapy")`.
-  * Alice nhận được tín hiệu `goalResumed`, tiếp tục và hoàn tất liệu trình an toàn.
+  * Bác sĩ Bob tiếp nhận yêu cầu, tiến hành tái khám (`review_symptoms`) và điều chỉnh liều lượng thuốc (`adjust_therapy`).
+  * Khi recovery scheme hoàn tất (`adjust_therapy` hoàn thành), `FaultTolerantSchemeBoard` **tự động kích hoạt `resumeGoal("follow_therapy")`** mà Bác sĩ không cần phải gọi thủ công.
+  * Alice nhận được tín hiệu `goalResumed`, tự động được gỡ đình chỉ (unfrozen intention), tiếp tục và hoàn tất liệu trình an toàn.
 
 ---
 
