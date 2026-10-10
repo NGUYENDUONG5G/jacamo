@@ -21,8 +21,5 @@ early_recovery_reason("no_more_symptoms").
     updateOrgBelief("symptoms_cleared(alice, 3)").
 
 
-// Lang nghe khi Goal duoc phuc hoi sau khi tai kham
-+goalResumed("follow_therapy") <-
-    .wait(1000);
-    goalAchieved(follow_therapy).
+
 

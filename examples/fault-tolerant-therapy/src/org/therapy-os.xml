@@ -23,6 +23,12 @@
                 <role id="doctor" min="1" max="1" />
                 <role id="pharmacist" min="1" max="1" />
             </roles>
+            <links>
+                <link from="doctor"     type="authority"     to="patient"    scope="intra-group" />
+                <link from="patient"    type="communication" to="doctor"     scope="intra-group" />
+                <link from="doctor"     type="communication" to="pharmacist" scope="intra-group" />
+                <link from="pharmacist" type="communication" to="patient"    scope="intra-group" />
+            </links>
         </group-specification>
     </structural-specification>
 
