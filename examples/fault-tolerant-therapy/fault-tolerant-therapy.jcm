@@ -1,6 +1,4 @@
-/*
-    JaCaMo Project File: Fault-Tolerant Therapy Example
-*/
+
 
 mas therapy_mas {
 
@@ -10,12 +8,12 @@ mas therapy_mas {
 
     organisation medical_org: therapy-os.xml {
         group t_group: therapy_group {
-            responsible-for: main_sch
+            responsible-for: therapy_sch
             players: alice_patient patient
                      dr_bob        doctor
                      carol_pharma  pharmacist
         }
-        scheme main_sch: therapy_sch
+        scheme therapy_sch: therapy_sch
     }
 
     asl-path: "src/agt"

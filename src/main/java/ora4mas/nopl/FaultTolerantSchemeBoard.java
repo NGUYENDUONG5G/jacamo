@@ -1,7 +1,6 @@
 package ora4mas.nopl;
 
 import cartago.OPERATION;
-import cartago.OpFeedbackParam;
 import jason.asSemantics.ActionExec;
 import jason.asSemantics.Agent;
 import jason.asSemantics.Circumstance;
@@ -31,6 +30,8 @@ import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import jason.stdlib.resume;
@@ -46,7 +47,39 @@ import npl.parser.ParseException;
 
 public class FaultTolerantSchemeBoard extends SchemeBoard {
 
-    private static final Logger logger = Logger.getLogger(FaultTolerantSchemeBoard.class.getName());
+    public String getSchemeName() {
+        try {
+            if (getId() != null && getId().getName() != null && !getId().getName().isEmpty()) {
+                return getId().getName();
+            }
+        } catch (Throwable ignored) {}
+        if (schemeType != null && !schemeType.isEmpty()) {
+            return schemeType;
+        }
+        if (getSpec() != null && getSpec().getId() != null) {
+            return getSpec().getId();
+        }
+        return "SchemeBoard";
+    }
+
+    private final Logger logger = new Logger("SchemeBoard", null) {
+        @Override
+        public boolean isLoggable(Level level) {
+            String name = getSchemeName();
+            return Logger.getLogger(name).isLoggable(level);
+        }
+
+        @Override
+        public void log(LogRecord record) {
+            String name = getSchemeName();
+            if (name != null && !name.isEmpty()) {
+                record.setLoggerName(name);
+                Logger.getLogger(name).log(record);
+            } else {
+                super.log(record);
+            }
+        }
+    };
 
     protected Map<String, Failure> failures = new LinkedHashMap<>();
     protected BeliefBase boardBeliefBase = new DefaultBeliefBase();
@@ -701,10 +734,14 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             for (PendingRecovery rec : list) {
                 FaultTolerantSchemeBoard src = rec.getSourceBoard();
                 String failedGoal = rec.getFailedGoalId();
-                logger.info("Recovery scheme '" + recSchType + "' succeeded! Automatically RESUMING failed goal '" + failedGoal + "' on source board.");
-                src.resumeGoal(failedGoal);
-                safeSignal("recovery_succeeded", recSchType, failedGoal);
-                safeDefineObsProperty("recoverySucceeded", recSchType, failedGoal);
+                if (src != null) {
+                    src.logger.info("Recovery scheme '" + recSchType + "' succeeded! Automatically RESUMING failed goal '" + failedGoal + "' on source board.");
+                    src.resumeGoal(failedGoal);
+                    src.safeSignal("recovery_succeeded", recSchType, failedGoal);
+                    src.safeDefineObsProperty("recoverySucceeded", recSchType, failedGoal);
+                } else {
+                    Logger.getLogger(recSchType).info("Recovery scheme '" + recSchType + "' succeeded! Automatically RESUMING failed goal '" + failedGoal + "' on source board.");
+                }
             }
         }
     }
