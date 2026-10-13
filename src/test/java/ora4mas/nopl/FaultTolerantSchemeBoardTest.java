@@ -370,6 +370,52 @@ public class FaultTolerantSchemeBoardTest {
         assertEquals("Running intentions should be restored to 1", 1, ts.getC().getNbRunningIntentions());
         assertFalse("reconsult_scheme pending recovery should be cleared", FaultTolerantSchemeBoard.hasPendingRecovery("reconsult_scheme"));
     }
+
+    @Test
+    public void testAutomaticBeliefSyncWithoutUpdateOrgBelief() throws Exception {
+        FaultTolerantSchemeBoard.clearPendingRecoveries();
+
+        File file = new File("sample_org.xml");
+        Map<String, List<Failure>> failuresByScheme = FaultTolerantXMLReader.parseFailuresFromFile(file);
+
+        FaultTolerantSchemeBoard mainBoard = new FaultTolerantSchemeBoard();
+        mainBoard.setSchemeType("therapy_sch");
+        for (Failure f : failuresByScheme.get("therapy_sch")) {
+            mainBoard.addFailureSpec(f);
+        }
+
+        // Setup Alice intention & TS
+        jason.asSemantics.Agent patient = new jason.asSemantics.Agent();
+        patient.initAg();
+        jason.asSemantics.TransitionSystem ts = new jason.asSemantics.TransitionSystem(patient, new jason.asSemantics.Circumstance(), null, new jason.infra.local.LocalAgArch());
+        patient.setTS(ts);
+
+        jason.asSemantics.Intention intention = new jason.asSemantics.Intention();
+        jason.asSyntax.Plan plan = jason.asSyntax.ASSyntax.parsePlan("+!follow_therapy[scheme(therapy_sch)] <- .wait(1000).");
+        jason.asSemantics.IntendedMeans im = new jason.asSemantics.IntendedMeans(
+            new jason.asSemantics.Option(plan, new jason.asSemantics.Unifier()),
+            jason.asSyntax.ASSyntax.parseTrigger("+!follow_therapy[scheme(therapy_sch)]")
+        );
+        intention.push(im);
+        ts.getC().addRunningIntention(intention);
+
+        mainBoard.registerAgent("alice_patient", patient);
+
+        assertFalse("Goal should not be suspended initially", mainBoard.isGoalSuspended("follow_therapy"));
+
+        // Alice chi phat sinh niem tin moi (qua event them belief vao Circumstance ma KHONG GOI updateOrgBelief thu cong):
+        jason.asSyntax.Trigger trig = new jason.asSyntax.Trigger(
+            jason.asSyntax.Trigger.TEOperator.add,
+            jason.asSyntax.Trigger.TEType.belief,
+            jason.asSyntax.ASSyntax.parseLiteral("symptoms_cleared(alice, 3)")
+        );
+        ts.getC().addEvent(new jason.asSemantics.Event(trig));
+
+        // KIEM TRA: Main board phai TU DONG phat hien qua listener va SUSPEND goal ngay lap tuc!
+        assertTrue("Goal follow_therapy should be AUTOMATICALLY suspended via listener", mainBoard.isGoalSuspended("follow_therapy"));
+        assertTrue("Alice intention should be AUTOMATICALLY suspended", mainBoard.isJasonGoalSuspended("alice_patient", "follow_therapy"));
+        assertEquals(0, ts.getC().getNbRunningIntentions());
+    }
 }
 
 

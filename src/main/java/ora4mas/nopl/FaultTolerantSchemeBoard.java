@@ -28,11 +28,11 @@ import jason.infra.local.RunLocalMAS;
 import java.io.File;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import jason.asSemantics.CircumstanceListener;
 
 import jason.stdlib.resume;
 import jason.stdlib.suspend;
@@ -41,8 +41,11 @@ import moise.os.fs.ArgumentSpec;
 import moise.os.fs.ConditionSpec;
 import moise.os.fs.ErrorSpec;
 import moise.os.fs.Failure;
+import moise.os.fs.Mission;
+import moise.os.ns.Norm;
 import moise.xml.FaultTolerantXMLReader;
 import npl.parser.ParseException;
+import ora4mas.nopl.oe.Player;
 
 
 public class FaultTolerantSchemeBoard extends SchemeBoard {
@@ -85,6 +88,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     protected BeliefBase boardBeliefBase = new DefaultBeliefBase();
     protected Set<String> suspendedGoals = new HashSet<>();
     protected Set<String> failedGoals = new HashSet<>();
+    protected Set<String> handledErrors = Collections.synchronizedSet(new HashSet<>());
     protected Agent evalAgent = new Agent();
 
     protected Map<String, Agent> registeredAgents = new LinkedHashMap<>();
@@ -131,6 +135,9 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     protected String schemeType = null;
     protected Set<String> achievedGoals = Collections.synchronizedSet(new LinkedHashSet<>());
 
+    protected final Set<String> listenedAgents = Collections.synchronizedSet(new HashSet<>());
+    protected ScheduledExecutorService syncExecutor;
+
     {
         evalAgent.initAg();
         evalAgent.setBB(boardBeliefBase);
@@ -143,6 +150,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
     @Override
     public void destroy() {
+        stopBeliefSyncMonitor();
         activeBoards.remove(this);
         super.destroy();
     }
@@ -153,6 +161,209 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         this.schemeType = schType;
         super.init(osFile, schType);
         loadFailuresFromOS(osFile, schType);
+        startBeliefSyncMonitor();
+    }
+
+    public synchronized void startBeliefSyncMonitor() {
+        if (syncExecutor == null || syncExecutor.isShutdown()) {
+            syncExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "FaultTolerant-BeliefSync-" + getSchemeName());
+                t.setDaemon(true);
+                return t;
+            });
+            syncExecutor.scheduleWithFixedDelay(() -> {
+                try {
+                    syncAllAgentBeliefs();
+                    evaluateFailures();
+                } catch (Throwable ignored) {}
+            }, 300, 300, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    public synchronized void stopBeliefSyncMonitor() {
+        if (syncExecutor != null && !syncExecutor.isShutdown()) {
+            syncExecutor.shutdownNow();
+            syncExecutor = null;
+        }
+    }
+
+    public Set<String> getLinkedAgents() {
+        Set<String> linked = new HashSet<>();
+
+    
+        linked.addAll(registeredAgents.keySet());
+
+   
+        Set<String> schemeMissionIds = new HashSet<>();
+        if (getSpec() != null && getSpec().getMissions() != null) {
+            for (Mission m : getSpec().getMissions()) {
+                schemeMissionIds.add(m.getId());
+            }
+        }
+
+    
+        if (getSchState() != null && getSchState().getPlayers() != null) {
+            for (Player p : getSchState().getPlayers()) {
+                if (p != null && p.getAg() != null) {
+                    if (schemeMissionIds.isEmpty() || schemeMissionIds.contains(p.getTarget())) {
+                        linked.add(p.getAg());
+                    }
+                }
+            }
+        }
+
+      
+        Set<String> linkedRoles = new HashSet<>();
+        try {
+            if (getSpec() != null && getSpec().getFS() != null && getSpec().getFS().getOS() != null && getSpec().getFS().getOS().getNS() != null) {
+                for (Norm norm : getSpec().getFS().getOS().getNS().getNorms()) {
+                    if (norm != null && norm.getMission() != null && schemeMissionIds.contains(norm.getMission().getId())) {
+                        if (norm.getRole() != null) {
+                            linkedRoles.add(norm.getRole().getId());
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+      
+        String schId = getSchemeName();
+        String schType = getSchemeType();
+        try {
+            Collection<GroupBoard> gbs = GroupBoard.getGroupBoards();
+            if (gbs != null) {
+                for (GroupBoard gb : gbs) {
+                    if (gb == null || gb.getGrpState() == null) continue;
+                    Collection<String> respSchemes = gb.getGrpState().getSchemesResponsibleFor();
+                    boolean isResp = false;
+                    if (respSchemes != null) {
+                        if ((schId != null && respSchemes.contains(schId)) || (schType != null && respSchemes.contains(schType))) {
+                            isResp = true;
+                        }
+                    }
+                    if (isResp) {
+                        for (Player p : gb.getGrpState().getPlayers()) {
+                            if (p != null && p.getAg() != null) {
+                                String role = p.getTarget();
+                                if (linkedRoles.isEmpty() || (role != null && linkedRoles.contains(role))) {
+                                    linked.add(p.getAg());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        // 6. Quet qua getSchState().getGroupsResponsibleFor() neu co
+        try {
+            if (getSchState() != null && getSchState().getGroupsResponsibleFor() != null) {
+                for (ora4mas.nopl.oe.Group grp : getSchState().getGroupsResponsibleFor()) {
+                    if (grp != null && grp.getPlayers() != null) {
+                        for (Player p : grp.getPlayers()) {
+                            if (p != null && p.getAg() != null) {
+                                String role = p.getTarget();
+                                if (linkedRoles.isEmpty() || (role != null && linkedRoles.contains(role))) {
+                                    linked.add(p.getAg());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return linked;
+    }
+
+    public synchronized void syncAllAgentBeliefs() {
+        for (String agName : getLinkedAgents()) {
+            Agent ag = getAgentByName(agName);
+            if (ag != null) {
+                syncBeliefsFromAgent(agName, ag);
+            }
+            BeliefBase bb = registeredBeliefBases.get(agName);
+            if (bb != null) {
+                syncBeliefsFromBB(agName, bb);
+            }
+        }
+    }
+
+    public void syncBeliefsFromAgent(String agName, Agent ag) {
+        if (ag == null || agName == null) return;
+        attachAgentListener(agName, ag);
+        syncBeliefsFromBB(agName, ag.getBB());
+    }
+
+    public void syncBeliefsFromBB(String agName, BeliefBase bb) {
+        if (bb == null) return;
+        try {
+            for (Literal lit : bb) {
+                if (boardBeliefBase.contains(lit) == null) {
+                    boardBeliefBase.add(lit.copy());
+                    logger.fine("Synced belief from " + agName + ": " + lit);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public void attachAgentListener(String agName, Agent ag) {
+        if (ag == null || agName == null || listenedAgents.contains(agName)) return;
+        try {
+            if (ag.getTS() != null && ag.getTS().getC() != null) {
+                Circumstance c = ag.getTS().getC();
+                c.addEventListener(new CircumstanceListener() {
+                    @Override
+                    public void eventAdded(Event ev) {
+                        if (ev == null) return;
+                        Trigger trig = ev.getTrigger();
+                        if (trig != null && !trig.isGoal()) {
+                            Literal lit = trig.getLiteral();
+                            if (lit != null) {
+                                if (trig.isAddition()) {
+                                    onAgentBeliefAdded(agName, lit);
+                                } else {
+                                    onAgentBeliefRemoved(agName, lit);
+                                }
+                            }
+                        }
+                    }
+                });
+                listenedAgents.add(agName);
+                logger.fine("Attached automatic belief listener to agent '" + agName + "' on scheme '" + getSchemeName() + "'.");
+            }
+        } catch (Exception e) {
+            logger.warning("Could not attach listener to agent " + agName + ": " + e.getMessage());
+        }
+    }
+
+    public synchronized void onAgentBeliefAdded(String agName, Literal lit) {
+        if (lit == null || agName == null) return;
+        try {
+            Literal copyLit = lit.copy();
+            if (boardBeliefBase.contains(copyLit) == null) {
+                boardBeliefBase.add(copyLit);
+                if (syncExecutor != null && !syncExecutor.isShutdown()) {
+                    syncExecutor.submit(this::evaluateFailures);
+                } else {
+                    evaluateFailures();
+                }
+            }
+        } catch (Exception e) {
+            logger.warning("Error processing auto-synced belief from " + agName + ": " + e.getMessage());
+        }
+    }
+
+    public synchronized void onAgentBeliefRemoved(String agName, Literal lit) {
+        if (lit == null || agName == null) return;
+        try {
+            if (boardBeliefBase.contains(lit) != null) {
+                boardBeliefBase.remove(lit);
+                logger.fine("Belief removed from linked agent '" + agName + "': " + lit);
+            }
+        } catch (Exception e) {
+            logger.warning("Error processing belief removal from " + agName + ": " + e.getMessage());
+        }
     }
 
     public String getSchemeType() {
@@ -180,6 +391,8 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     public void registerAgent(String agName, Agent ag) {
         if (agName != null && ag != null) {
             registeredAgents.put(agName, ag);
+            syncBeliefsFromAgent(agName, ag);
+            evaluateFailures();
         }
     }
 
@@ -195,6 +408,8 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                 name = "agent_" + (registeredAgents.size() + 1);
             }
             registeredAgents.put(name, ag);
+            syncBeliefsFromAgent(name, ag);
+            evaluateFailures();
         }
     }
 
@@ -348,7 +563,8 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
     }
 
-    public void evaluateFailures() {
+    public synchronized void evaluateFailures() {
+        syncAllAgentBeliefs();
         for (Failure f : failures.values()) {
             String goalId = f.getGoalId();
 
@@ -357,6 +573,9 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             }
 
             for (ErrorSpec error : f.getErrors()) {
+                if (handledErrors.contains(goalId + "::" + error.getId())) {
+                    continue;
+                }
                 ConditionSpec cond = error.getCondition();
                 if (cond == null || cond.isEmpty()) {
                     continue;
@@ -568,15 +787,14 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     protected void handleError(Failure failure, ErrorSpec error, Unifier unif) {
         String goalId = failure.getGoalId();
         suspendedGoals.add(goalId);
+        handledErrors.add(goalId + "::" + error.getId());
 
         List<Object> resolvedArgs = new ArrayList<>();
         for (ArgumentSpec argSpec : error.getArguments()) {
             Object resolvedVal = resolveArgumentValue(argSpec, unif);
             resolvedArgs.add(resolvedVal);
 
-            try {
-                setArgumentValue(goalId, argSpec.getId(), resolvedVal);
-            } catch (Exception ignored) {}
+            safeSetArgumentValue(goalId, argSpec.getId(), resolvedVal);
         }
 
         logger.severe("FAILURE DETECTED for goal '" + goalId + "' with error '" + error.getId() + "'. Args: " + resolvedArgs);
@@ -1187,14 +1405,47 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         safeSignal("goal_failed", goalId);
     }
 
+    private static java.lang.reflect.Field artifactLockField;
+    static {
+        try {
+            artifactLockField = cartago.Artifact.class.getDeclaredField("lock");
+            artifactLockField.setAccessible(true);
+        } catch (Throwable ignored) {}
+    }
+
+    private java.util.concurrent.locks.ReentrantLock getArtifactLock() {
+        if (artifactLockField != null) {
+            try {
+                return (java.util.concurrent.locks.ReentrantLock) artifactLockField.get(this);
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
     protected void safeSignal(String signalName, Object... args) {
+        java.util.concurrent.locks.ReentrantLock l = getArtifactLock();
+        boolean lockedHere = false;
+        if (l != null && !l.isHeldByCurrentThread()) {
+            l.lock();
+            lockedHere = true;
+        }
         try {
             signal(signalName, args);
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
+        } finally {
+            if (lockedHere && l != null && l.isHeldByCurrentThread()) {
+                l.unlock();
+            }
         }
     }
 
     protected void safeDefineObsProperty(String name, Object... values) {
+        java.util.concurrent.locks.ReentrantLock l = getArtifactLock();
+        boolean lockedHere = false;
+        if (l != null && !l.isHeldByCurrentThread()) {
+            l.lock();
+            lockedHere = true;
+        }
         try {
             if (hasObsProperty(name)) {
                 getObsProperty(name).updateValues(values);
@@ -1202,16 +1453,39 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                 defineObsProperty(name, values);
             }
         } catch (Exception ignored) {
+        } finally {
+            if (lockedHere && l != null && l.isHeldByCurrentThread()) {
+                l.unlock();
+            }
         }
     }
 
     protected void safeRemoveObsProperty(String name) {
+        java.util.concurrent.locks.ReentrantLock l = getArtifactLock();
+        boolean lockedHere = false;
+        if (l != null && !l.isHeldByCurrentThread()) {
+            l.lock();
+            lockedHere = true;
+        }
         try {
             if (hasObsProperty(name)) {
                 removeObsProperty(name);
             }
         } catch (Exception ignored) {
+        } finally {
+            if (lockedHere && l != null && l.isHeldByCurrentThread()) {
+                l.unlock();
+            }
         }
+    }
+
+    protected void safeSetArgumentValue(String goalId, String argId, Object value) {
+        try {
+            if (getSchState() != null) {
+                getSchState().setGoalArgValue(goalId, argId, value);
+            }
+        } catch (Exception ignored) {}
+        safeDefineObsProperty("goalArgument", getSchemeName(), goalId, argId, value);
     }
 
     public boolean isGoalSuspended(String goalId) {

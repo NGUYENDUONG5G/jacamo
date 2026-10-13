@@ -29,9 +29,9 @@ early_recovery_reason("no_more_symptoms").
     .print("[BENH NHAN ALICE] Ngay 1 - 2: Uong thuoc deu dan ", Dosage, " theo chi dinh. Con sot da ha.");
     .wait(1000);
     .print("[BENH NHAN ALICE] Ngay 3: Thay het sot hoan toan va hong khong con dau! Alice dinh dung thuoc som.");
-    .print("[BENH NHAN ALICE] Chia se thong tin len Scheme Board: symptoms_cleared(alice_patient, 3)...");
+    .print("[BENH NHAN ALICE] Phat sinh niem tin noi tai: symptoms_cleared(alice_patient, 3)...");
 
-    updateOrgBelief("symptoms_cleared(alice_patient, 3)");
+    +symptoms_cleared(alice_patient, 3);
     
     .print("[BENH NHAN ALICE] Da nhan duoc huong dan va loi khuyen tu bac si Bob sau buoi tai kham!");
     .print("[BENH NHAN ALICE] Toi da hieu vi khuan co the van con tiem an. Toi se nghiem tuc uong not cac ngay con lai de tranh khang thuoc.");
