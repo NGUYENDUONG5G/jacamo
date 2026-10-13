@@ -46,11 +46,7 @@
     .send(Patient, tell, doctor_advice("Phai uong du lieu trinh de tranh vi khuan khang thuoc")).
 
 
-+recovery_required(RecSch, Goal, Error, [Patient, Day, Reason]) <-
-    .print(" Nhan tin hieu yeu cau phuc hoi '", RecSch, "' cho muc tieu '", Goal, "' do loi '", Error, "'!");
-    .print("Cac tham so thu thap duoc: [", Patient, ", ", Day, ", ", Reason, "]");
-    .print("Benh nhan ", Patient, " het trieu chung som vao ngay ", Day, " (ly do: ", Reason, ") va co y dinh ngung uong thuoc!");
-    .print("Dung khang sinh som dan den nguy co tai phat nang va hinh thanh vi khuan khang thuoc (Antibiotic Resistance)!").
+
 
 
 
