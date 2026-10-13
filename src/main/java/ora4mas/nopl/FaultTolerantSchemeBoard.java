@@ -4,6 +4,7 @@ import cartago.OPERATION;
 import jason.asSemantics.ActionExec;
 import jason.asSemantics.Agent;
 import jason.asSemantics.Circumstance;
+import jason.asSemantics.CircumstanceListener;
 import jason.asSemantics.Event;
 import jason.asSemantics.IntendedMeans;
 import jason.asSemantics.Intention;
@@ -24,17 +25,6 @@ import jason.bb.BeliefBase;
 import jason.bb.DefaultBeliefBase;
 import jason.infra.local.LocalAgArch;
 import jason.infra.local.RunLocalMAS;
-
-import java.io.File;
-import java.io.InputStream;
-import java.lang.reflect.Field;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
-import jason.asSemantics.CircumstanceListener;
-
 import jason.stdlib.resume;
 import jason.stdlib.suspend;
 import moise.common.MoiseException;
@@ -48,56 +38,31 @@ import moise.xml.FaultTolerantXMLReader;
 import npl.parser.ParseException;
 import ora4mas.nopl.oe.Player;
 
+import java.io.File;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 public class FaultTolerantSchemeBoard extends SchemeBoard {
 
-    public String getSchemeName() {
+    private static final String SUSPENDED_PREFIX = "suspended-";
+    private static final Field ARTIFACT_LOCK_FIELD;
+
+    static {
+        Field f = null;
         try {
-            if (getId() != null && getId().getName() != null && !getId().getName().isEmpty()) {
-                return getId().getName();
-            }
-        } catch (Throwable ignored) {}
-        if (schemeType != null && !schemeType.isEmpty()) {
-            return schemeType;
+            f = cartago.Artifact.class.getDeclaredField("lock");
+            f.setAccessible(true);
+        } catch (Throwable ignored) {
+            f = null;
         }
-        if (getSpec() != null && getSpec().getId() != null) {
-            return getSpec().getId();
-        }
-        return "SchemeBoard";
+        ARTIFACT_LOCK_FIELD = f;
     }
-
-    private final Logger logger = new Logger("SchemeBoard", null) {
-        @Override
-        public boolean isLoggable(Level level) {
-            String name = getSchemeName();
-            return Logger.getLogger(name).isLoggable(level);
-        }
-
-        @Override
-        public void log(LogRecord record) {
-            String name = getSchemeName();
-            if (name != null && !name.isEmpty()) {
-                record.setLoggerName(name);
-                Logger.getLogger(name).log(record);
-            } else {
-                super.log(record);
-            }
-        }
-    };
-
-    protected Map<String, Failure> failures = new LinkedHashMap<>();
-    protected BeliefBase boardBeliefBase = new DefaultBeliefBase();
-    protected Set<String> suspendedGoals = new HashSet<>();
-    protected Set<String> failedGoals = new HashSet<>();
-    protected Set<String> handledErrors = Collections.synchronizedSet(new HashSet<>());
-    protected Agent evalAgent = new Agent();
-
-    protected Map<String, Agent> registeredAgents = new LinkedHashMap<>();
-    protected Map<String, BeliefBase> registeredBeliefBases = new LinkedHashMap<>();
-    protected String lastCallingAgent = null;
-
-
-    protected Map<String, Set<String>> suspendedAgentGoals = new LinkedHashMap<>();
 
     public static class PendingRecovery {
         private final FaultTolerantSchemeBoard sourceBoard;
@@ -132,6 +97,36 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     protected static final CopyOnWriteArrayList<FaultTolerantSchemeBoard> activeBoards = new CopyOnWriteArrayList<>();
     protected static final Map<String, CopyOnWriteArrayList<PendingRecovery>> pendingRecoveries = new ConcurrentHashMap<>();
 
+    private final Logger logger = new Logger("SchemeBoard", null) {
+        @Override
+        public boolean isLoggable(Level level) {
+            return Logger.getLogger(getSchemeName()).isLoggable(level);
+        }
+
+        @Override
+        public void log(LogRecord record) {
+            String name = getSchemeName();
+            if (name != null && !name.isEmpty()) {
+                record.setLoggerName(name);
+                Logger.getLogger(name).log(record);
+            } else {
+                super.log(record);
+            }
+        }
+    };
+
+    protected Map<String, Failure> failures = new LinkedHashMap<>();
+    protected BeliefBase boardBeliefBase = new DefaultBeliefBase();
+    protected Set<String> suspendedGoals = new HashSet<>();
+    protected Set<String> failedGoals = new HashSet<>();
+    protected Set<String> handledErrors = Collections.synchronizedSet(new HashSet<>());
+    protected Agent evalAgent = new Agent();
+
+    protected Map<String, Agent> registeredAgents = new LinkedHashMap<>();
+    protected Map<String, BeliefBase> registeredBeliefBases = new LinkedHashMap<>();
+    protected String lastCallingAgent = null;
+    protected Map<String, Set<String>> suspendedAgentGoals = new LinkedHashMap<>();
+
     protected String osFile = null;
     protected String schemeType = null;
     protected Set<String> achievedGoals = Collections.synchronizedSet(new LinkedHashSet<>());
@@ -147,6 +142,21 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
     public FaultTolerantSchemeBoard() {
         super();
+    }
+
+    public String getSchemeName() {
+        try {
+            if (getId() != null && getId().getName() != null && !getId().getName().isEmpty()) {
+                return getId().getName();
+            }
+        } catch (Throwable ignored) {}
+        if (schemeType != null && !schemeType.isEmpty()) {
+            return schemeType;
+        }
+        if (getSpec() != null && getSpec().getId() != null) {
+            return getSpec().getId();
+        }
+        return "SchemeBoard";
     }
 
     @Override
@@ -188,13 +198,21 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
     }
 
+    private static void addPlayersByRole(Iterable<Player> players, Set<String> roles, Set<String> linked) {
+        if (players == null) return;
+        for (Player p : players) {
+            if (p != null && p.getAg() != null) {
+                String role = p.getTarget();
+                if (roles.isEmpty() || (role != null && roles.contains(role))) {
+                    linked.add(p.getAg());
+                }
+            }
+        }
+    }
+
     public Set<String> getLinkedAgents() {
-        Set<String> linked = new HashSet<>();
+        Set<String> linked = new HashSet<>(registeredAgents.keySet());
 
-    
-        linked.addAll(registeredAgents.keySet());
-
-   
         Set<String> schemeMissionIds = new HashSet<>();
         if (getSpec() != null && getSpec().getMissions() != null) {
             for (Mission m : getSpec().getMissions()) {
@@ -202,32 +220,28 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             }
         }
 
-    
         if (getSchState() != null && getSchState().getPlayers() != null) {
             for (Player p : getSchState().getPlayers()) {
-                if (p != null && p.getAg() != null) {
-                    if (schemeMissionIds.isEmpty() || schemeMissionIds.contains(p.getTarget())) {
-                        linked.add(p.getAg());
-                    }
+                if (p != null && p.getAg() != null
+                        && (schemeMissionIds.isEmpty() || schemeMissionIds.contains(p.getTarget()))) {
+                    linked.add(p.getAg());
                 }
             }
         }
 
-      
         Set<String> linkedRoles = new HashSet<>();
         try {
-            if (getSpec() != null && getSpec().getFS() != null && getSpec().getFS().getOS() != null && getSpec().getFS().getOS().getNS() != null) {
+            if (getSpec() != null && getSpec().getFS() != null && getSpec().getFS().getOS() != null
+                    && getSpec().getFS().getOS().getNS() != null) {
                 for (Norm norm : getSpec().getFS().getOS().getNS().getNorms()) {
-                    if (norm != null && norm.getMission() != null && schemeMissionIds.contains(norm.getMission().getId())) {
-                        if (norm.getRole() != null) {
-                            linkedRoles.add(norm.getRole().getId());
-                        }
+                    if (norm != null && norm.getMission() != null && norm.getRole() != null
+                            && schemeMissionIds.contains(norm.getMission().getId())) {
+                        linkedRoles.add(norm.getRole().getId());
                     }
                 }
             }
         } catch (Throwable ignored) {}
 
-      
         String schId = getSchemeName();
         String schType = getSchemeType();
         try {
@@ -236,39 +250,19 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                 for (GroupBoard gb : gbs) {
                     if (gb == null || gb.getGrpState() == null) continue;
                     Collection<String> respSchemes = gb.getGrpState().getSchemesResponsibleFor();
-                    boolean isResp = false;
-                    if (respSchemes != null) {
-                        if ((schId != null && respSchemes.contains(schId)) || (schType != null && respSchemes.contains(schType))) {
-                            isResp = true;
-                        }
-                    }
-                    if (isResp) {
-                        for (Player p : gb.getGrpState().getPlayers()) {
-                            if (p != null && p.getAg() != null) {
-                                String role = p.getTarget();
-                                if (linkedRoles.isEmpty() || (role != null && linkedRoles.contains(role))) {
-                                    linked.add(p.getAg());
-                                }
-                            }
-                        }
+                    if (respSchemes != null
+                            && ((schId != null && respSchemes.contains(schId)) || (schType != null && respSchemes.contains(schType)))) {
+                        addPlayersByRole(gb.getGrpState().getPlayers(), linkedRoles, linked);
                     }
                 }
             }
         } catch (Throwable ignored) {}
 
-        // 6. Quet qua getSchState().getGroupsResponsibleFor() neu co
         try {
             if (getSchState() != null && getSchState().getGroupsResponsibleFor() != null) {
                 for (ora4mas.nopl.oe.Group grp : getSchState().getGroupsResponsibleFor()) {
-                    if (grp != null && grp.getPlayers() != null) {
-                        for (Player p : grp.getPlayers()) {
-                            if (p != null && p.getAg() != null) {
-                                String role = p.getTarget();
-                                if (linkedRoles.isEmpty() || (role != null && linkedRoles.contains(role))) {
-                                    linked.add(p.getAg());
-                                }
-                            }
-                        }
+                    if (grp != null) {
+                        addPlayersByRole(grp.getPlayers(), linkedRoles, linked);
                     }
                 }
             }
@@ -312,8 +306,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         if (ag == null || agName == null || listenedAgents.contains(agName)) return;
         try {
             if (ag.getTS() != null && ag.getTS().getC() != null) {
-                Circumstance c = ag.getTS().getC();
-                c.addEventListener(new CircumstanceListener() {
+                ag.getTS().getC().addEventListener(new CircumstanceListener() {
                     @Override
                     public void eventAdded(Event ev) {
                         if (ev == null) return;
@@ -369,8 +362,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
     public String getSchemeType() {
         if (schemeType != null) return schemeType;
-        if (getSpec() != null) return getSpec().getId();
-        return null;
+        return getSpec() != null ? getSpec().getId() : null;
     }
 
     public void setSchemeType(String schType) {
@@ -386,7 +378,8 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     }
 
     public static boolean hasPendingRecovery(String recoverySchemeId) {
-        return pendingRecoveries.containsKey(recoverySchemeId) && !pendingRecoveries.get(recoverySchemeId).isEmpty();
+        CopyOnWriteArrayList<PendingRecovery> list = pendingRecoveries.get(recoverySchemeId);
+        return list != null && !list.isEmpty();
     }
 
     public void registerAgent(String agName, Agent ag) {
@@ -408,9 +401,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             if (name == null) {
                 name = "agent_" + (registeredAgents.size() + 1);
             }
-            registeredAgents.put(name, ag);
-            syncBeliefsFromAgent(name, ag);
-            evaluateFailures();
+            registerAgent(name, ag);
         }
     }
 
@@ -448,9 +439,10 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             if (f != null && f.exists()) {
                 map = FaultTolerantXMLReader.parseFailuresFromFile(f);
             } else {
-                InputStream is = getClass().getClassLoader().getResourceAsStream(osPath);
+                ClassLoader cl = getClass().getClassLoader();
+                InputStream is = cl.getResourceAsStream(osPath);
                 if (is == null) {
-                    is = getClass().getClassLoader().getResourceAsStream("org/" + osPath);
+                    is = cl.getResourceAsStream("org/" + osPath);
                 }
                 if (is != null) {
                     map = FaultTolerantXMLReader.parseFailuresFromStream(is);
@@ -483,25 +475,18 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             cleanPath = cleanPath.substring(1);
         }
 
-        File f = new File(cleanPath);
-        if (f.exists()) return f;
-
-        f = new File("src/org", cleanPath);
-        if (f.exists()) return f;
-
-        f = new File("src", cleanPath);
-        if (f.exists()) return f;
-
-        f = new File("../src/org", cleanPath);
-        if (f.exists()) return f;
-
         String fileName = new File(cleanPath).getName();
-        f = new File("src/org", fileName);
-        if (f.exists()) return f;
-
-        f = new File(fileName);
-        if (f.exists()) return f;
-
+        File[] candidates = {
+                new File(cleanPath),
+                new File("src/org", cleanPath),
+                new File("src", cleanPath),
+                new File("../src/org", cleanPath),
+                new File("src/org", fileName),
+                new File(fileName)
+        };
+        for (File c : candidates) {
+            if (c.exists()) return c;
+        }
         return null;
     }
 
@@ -540,10 +525,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         try {
             caller = getOpUserName();
         } catch (Exception ignored) {}
-        if (caller == null) {
-            caller = "caller_agent";
-        }
-        registerAgentBelief(caller, literalStr);
+        registerAgentBelief(caller != null ? caller : "caller_agent", literalStr);
     }
 
     @OPERATION
@@ -568,7 +550,6 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         syncAllAgentBeliefs();
         for (Failure f : failures.values()) {
             String goalId = f.getGoalId();
-
             if (suspendedGoals.contains(goalId) || failedGoals.contains(goalId)) {
                 continue;
             }
@@ -586,8 +567,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                     LogicalFormula formula = ASSyntax.parseFormula(cond.getExpression());
                     Iterator<Unifier> unifs = formula.logicalConsequence(evalAgent, new Unifier());
                     if (unifs != null && unifs.hasNext()) {
-                        Unifier unif = unifs.next();
-                        handleError(f, error, unif);
+                        handleError(f, error, unifs.next());
                         break;
                     }
                 } catch (Exception e) {
@@ -597,11 +577,48 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
     }
 
+    private static Term findTermInUnifier(String id, Unifier unif) {
+        if (id == null) return null;
+
+        if (!id.isEmpty()) {
+            Term val = unif.get(Character.toUpperCase(id.charAt(0)) + id.substring(1));
+            if (val != null) return val;
+        }
+
+        for (VarTerm vt : unif) {
+            String vName = vt.getFunctor();
+            if (vName != null && vName.equalsIgnoreCase(id)) {
+                return unif.get(vt);
+            }
+        }
+
+        String idLower = id.toLowerCase();
+        String[] tokens = idLower.split("_");
+
+        for (VarTerm vt : unif) {
+            String vName = vt.getFunctor();
+            if (vName == null) continue;
+            for (String token : tokens) {
+                if (!token.isEmpty() && !token.equals("id") && token.equalsIgnoreCase(vName)) {
+                    return unif.get(vt);
+                }
+            }
+        }
+
+        for (VarTerm vt : unif) {
+            String vName = vt.getFunctor();
+            if (vName == null) continue;
+            String vNameLower = vName.toLowerCase();
+            if (idLower.contains(vNameLower) || vNameLower.contains(idLower)) {
+                return unif.get(vt);
+            }
+        }
+        return null;
+    }
 
     public Object resolveArgumentValue(ArgumentSpec argSpec, Unifier unif) {
         String id = argSpec.getId();
         int arity = argSpec.getArity();
-
 
         Literal foundBelief = findBeliefInAgents(id, arity);
         if (foundBelief != null) {
@@ -611,59 +628,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
 
         if (unif != null) {
-            Term val = null;
-
-
-            if (id != null && !id.isEmpty()) {
-                String capitalized = Character.toUpperCase(id.charAt(0)) + (id.length() > 1 ? id.substring(1) : "");
-                val = unif.get(capitalized);
-            }
-
-
-            if (val == null && id != null) {
-                String idLower = id.toLowerCase();
-                String[] tokens = idLower.split("_");
-
-
-                for (VarTerm vt : unif) {
-                    String vName = vt.getFunctor();
-                    if (vName != null && vName.equalsIgnoreCase(id)) {
-                        val = unif.get(vt);
-                        break;
-                    }
-                }
-
-
-                if (val == null) {
-                    for (VarTerm vt : unif) {
-                        String vName = vt.getFunctor();
-                        if (vName == null) continue;
-                        String vNameLower = vName.toLowerCase();
-
-                        for (String token : tokens) {
-                            if (!token.isEmpty() && !token.equals("id") && token.equalsIgnoreCase(vNameLower)) {
-                                val = unif.get(vt);
-                                break;
-                            }
-                        }
-                        if (val != null) break;
-                    }
-                }
-
-
-                if (val == null) {
-                    for (VarTerm vt : unif) {
-                        String vName = vt.getFunctor();
-                        if (vName == null) continue;
-                        String vNameLower = vName.toLowerCase();
-                        if (idLower.contains(vNameLower) || vNameLower.contains(idLower)) {
-                            val = unif.get(vt);
-                            break;
-                        }
-                    }
-                }
-            }
-
+            Term val = findTermInUnifier(id, unif);
             if (val != null) {
                 Object termVal = extractTermValue(val);
                 logger.info("Resolved argument '" + id + "' from condition unifier: " + val + " -> " + termVal);
@@ -690,25 +655,19 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                 Literal lit = findInBeliefBase(callerAg.getBB(), pi);
                 if (lit != null) return lit;
             }
-            BeliefBase callerBB = registeredBeliefBases.get(caller);
-            if (callerBB != null) {
-                Literal lit = findInBeliefBase(callerBB, pi);
-                if (lit != null) return lit;
-            }
+            Literal lit = findInBeliefBase(registeredBeliefBases.get(caller), pi);
+            if (lit != null) return lit;
         }
-
 
         for (Agent ag : registeredAgents.values()) {
             Literal lit = findInBeliefBase(ag.getBB(), pi);
             if (lit != null) return lit;
         }
 
-
         for (BeliefBase bb : registeredBeliefBases.values()) {
             Literal lit = findInBeliefBase(bb, pi);
             if (lit != null) return lit;
         }
-
 
         try {
             if (RunLocalMAS.getRunner() != null) {
@@ -724,11 +683,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             }
         } catch (Exception ignored) {}
 
-
-        Literal lit = findInBeliefBase(boardBeliefBase, pi);
-        if (lit != null) return lit;
-
-        return null;
+        return findInBeliefBase(boardBeliefBase, pi);
     }
 
     protected Literal findInBeliefBase(BeliefBase bb, PredicateIndicator pi) {
@@ -755,22 +710,23 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         if (lit == null) return null;
         if (arity == 1 && lit.getArity() >= 1) {
             return extractTermValue(lit.getTerm(0));
-        } else if (arity > 1) {
+        }
+        if (arity > 1) {
             List<Object> terms = new ArrayList<>();
             for (Term t : lit.getTerms()) {
                 terms.add(extractTermValue(t));
             }
             return terms;
-        } else {
-            return lit.getFunctor();
         }
+        return lit.getFunctor();
     }
 
     public static Object extractTermValue(Term t) {
         if (t == null) return null;
         if (t.isString()) {
             return ((StringTerm) t).getString();
-        } else if (t.isNumeric()) {
+        }
+        if (t.isNumeric()) {
             try {
                 double d = ((NumberTerm) t).solve();
                 if (d == (long) d) {
@@ -780,9 +736,8 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             } catch (Exception e) {
                 return t.toString();
             }
-        } else {
-            return t.toString();
         }
+        return t.toString();
     }
 
     protected void handleError(Failure failure, ErrorSpec error, Unifier unif) {
@@ -794,12 +749,10 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         for (ArgumentSpec argSpec : error.getArguments()) {
             Object resolvedVal = resolveArgumentValue(argSpec, unif);
             resolvedArgs.add(resolvedVal);
-
             safeSetArgumentValue(goalId, argSpec.getId(), resolvedVal);
         }
 
         logger.severe("FAILURE DETECTED for goal '" + goalId + "' with error '" + error.getId() + "'. Args: " + resolvedArgs);
-
 
         suspendJasonGoal(goalId);
 
@@ -815,64 +768,87 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     }
 
     protected void triggerRecoveryScheme(String recoverySchemeId, String goalId, String errorId, List<Object> args) {
-        PendingRecovery rec = new PendingRecovery(this, goalId, recoverySchemeId, errorId);
-        pendingRecoveries.computeIfAbsent(recoverySchemeId, k -> new CopyOnWriteArrayList<>()).add(rec);
+        pendingRecoveries.computeIfAbsent(recoverySchemeId, k -> new CopyOnWriteArrayList<>())
+                .add(new PendingRecovery(this, goalId, recoverySchemeId, errorId));
         logger.info("Registered pending recovery: recovery scheme '" + recoverySchemeId + "' for failed goal '" + goalId + "' (error: " + errorId + ").");
 
-        // Tu dong khoi tao recovery scheme artifact tren he thong
         autoCreateRecoverySchemeArtifact(recoverySchemeId);
 
         safeSignal("recovery_required", recoverySchemeId, goalId, errorId, args.toArray());
         safeDefineObsProperty("recoverySchemeRequired", recoverySchemeId, goalId);
     }
 
-    protected void autoCreateRecoverySchemeArtifact(String recoverySchemeId) {
-        boolean created = false;
-        cartago.ArtifactId recAid = null;
-
-        // Resolve osPath from this board, active boards, or OrgBoard
-        String osPath = this.osFile;
-        if (osPath == null) {
-            for (FaultTolerantSchemeBoard b : activeBoards) {
-                if (b != null && b.osFile != null) {
-                    osPath = b.osFile;
-                    break;
-                }
+    private String resolveKnownOsPath() {
+        if (osFile != null) return osFile;
+        for (FaultTolerantSchemeBoard b : activeBoards) {
+            if (b != null && b.osFile != null) {
+                return b.osFile;
             }
         }
-        if (osPath == null) {
-            try {
-                Collection<OrgBoard> orgBoards = OrgBoard.getOrbBoards();
-                if (orgBoards != null && !orgBoards.isEmpty()) {
-                    for (OrgBoard ob : orgBoards) {
-                        if (ob != null && ob.getOSFile() != null) {
-                            osPath = ob.getOSFile();
-                            break;
-                        }
+        try {
+            Collection<OrgBoard> orgBoards = OrgBoard.getOrbBoards();
+            if (orgBoards != null) {
+                for (OrgBoard ob : orgBoards) {
+                    if (ob != null && ob.getOSFile() != null) {
+                        return ob.getOSFile();
                     }
                 }
-            } catch (Throwable ignored) {}
-        }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
 
+    private void linkRecoverySchemeToGroupBoards(String recoverySchemeId) {
+        try {
+            Collection<GroupBoard> groupBoards = GroupBoard.getGroupBoards();
+            if (groupBoards == null) return;
+            for (GroupBoard gb : groupBoards) {
+                try {
+                    cartago.Workspace targetWsp = null;
+                    try {
+                        Field f = cartago.Artifact.class.getDeclaredField("wsp");
+                        f.setAccessible(true);
+                        targetWsp = (cartago.Workspace) f.get(gb);
+                    } catch (Throwable ignored) {}
+
+                    if (targetWsp != null) {
+                        cartago.ICartagoContext ctx = targetWsp.joinWorkspace(
+                                new cartago.AgentIdCredential("FaultTolerantSystem"),
+                                new cartago.ICartagoCallback() {
+                                    public void notifyCartagoEvent(cartago.CartagoEvent a) {}
+                                }
+                        );
+                        String gbArtName = gb.getGrpState() != null ? gb.getGrpState().getId() : "t_group";
+                        ctx.doAction(1, gbArtName, new cartago.Op("addSchemeWhenFormationOk", new Object[]{recoverySchemeId}), null, -1);
+                        logger.info("GroupBoard automatically linked recovery scheme '" + recoverySchemeId + "'.");
+                    } else if (gb.getGrpState() != null) {
+                        gb.getGrpState().addResponsibleForScheme(recoverySchemeId);
+                    }
+                } catch (Throwable e) {
+                    logger.warning("GroupBoard link notice: " + e.getMessage());
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    protected void autoCreateRecoverySchemeArtifact(String recoverySchemeId) {
+        String osPath = resolveKnownOsPath();
         if (osPath == null) {
             logger.warning("Cannot auto-create recovery scheme artifact '" + recoverySchemeId + "': OS specification file is unknown.");
             return;
         }
 
-        // Check if artifact already exists
+        boolean created = false;
         try {
-            recAid = lookupArtifact(recoverySchemeId);
-            if (recAid != null) {
+            if (lookupArtifact(recoverySchemeId) != null) {
                 created = true;
                 logger.info("Recovery scheme artifact '" + recoverySchemeId + "' already exists.");
             }
         } catch (Throwable ignored) {}
 
-        // Create recovery scheme artifact if not exists
         if (!created) {
             try {
-                cartago.ArtifactConfig cfg = new cartago.ArtifactConfig(osPath, recoverySchemeId);
-                recAid = makeArtifact(recoverySchemeId, getClass().getName(), cfg);
+                makeArtifact(recoverySchemeId, getClass().getName(), new cartago.ArtifactConfig(osPath, recoverySchemeId));
                 logger.info("FaultTolerantSchemeBoard automatically created recovery scheme artifact '" + recoverySchemeId + "'.");
                 created = true;
             } catch (Throwable e) {
@@ -883,41 +859,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         if (created) {
             safeDefineObsProperty("recoverySchemeCreated", recoverySchemeId);
             safeSignal("recovery_scheme_created", recoverySchemeId);
-
-           
-            try {
-                Collection<GroupBoard> groupBoards = GroupBoard.getGroupBoards();
-                if (groupBoards != null && !groupBoards.isEmpty()) {
-                    for (GroupBoard gb : groupBoards) {
-                        try {
-                            cartago.Workspace targetWsp = null;
-                            try {
-                                Field f = cartago.Artifact.class.getDeclaredField("wsp");
-                                f.setAccessible(true);
-                                targetWsp = (cartago.Workspace) f.get(gb);
-                            } catch (Throwable ignored) {}
-
-                            if (targetWsp != null) {
-                                cartago.ICartagoContext ctx = targetWsp.joinWorkspace(
-                                    new cartago.AgentIdCredential("FaultTolerantSystem"),
-                                    new cartago.ICartagoCallback() {
-                                        public void notifyCartagoEvent(cartago.CartagoEvent a) {}
-                                    }
-                                );
-                                String gbArtName = (gb.getGrpState() != null) ? gb.getGrpState().getId() : "t_group";
-                                ctx.doAction(1, gbArtName, new cartago.Op("addSchemeWhenFormationOk", new Object[] { recoverySchemeId }), null, -1);
-                                logger.info("GroupBoard automatically linked recovery scheme '" + recoverySchemeId + "'.");
-                            } else {
-                                if (gb.getGrpState() != null) {
-                                    gb.getGrpState().addResponsibleForScheme(recoverySchemeId);
-                                }
-                            }
-                        } catch (Throwable e) {
-                            logger.warning("GroupBoard link notice: " + e.getMessage());
-                        }
-                    }
-                }
-            } catch (Throwable ignored) {}
+            linkRecoverySchemeToGroupBoards(recoverySchemeId);
         }
     }
 
@@ -937,41 +879,46 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     protected void checkAndResumeOnRecoverySuccess(String achievedGoal) {
         String currentSch = getSchemeType();
 
-        // TH 1: Board nay la mot Recovery Scheme Board dang duoc cho doi (pending recovery):
-        if (currentSch != null && pendingRecoveries.containsKey(currentSch)) {
-            if (isSchemeCompleted(achievedGoal)) {
-                completeRecoveryForScheme(currentSch);
-                return;
-            }
+        if (currentSch != null && pendingRecoveries.containsKey(currentSch) && isSchemeCompleted(achievedGoal)) {
+            completeRecoveryForScheme(currentSch);
+            return;
         }
 
-        // TH 2: Cac goal cua recovery scheme duoc thuc thi ngay tren board nay:
         for (Map.Entry<String, CopyOnWriteArrayList<PendingRecovery>> entry : pendingRecoveries.entrySet()) {
             String recSchType = entry.getKey();
             for (PendingRecovery rec : entry.getValue()) {
-                if (rec.getSourceBoard() == this) {
-                    if (isRecoveryGoalAchievedOnBoard(recSchType, achievedGoal)) {
-                        completeRecoveryForScheme(recSchType);
-                        return;
-                    }
+                if (rec.getSourceBoard() == this && isRecoveryGoalAchievedOnBoard(recSchType, achievedGoal)) {
+                    completeRecoveryForScheme(recSchType);
+                    return;
                 }
             }
         }
     }
 
+    private boolean allLeafGoalsAchieved(Collection<moise.os.fs.Goal> goals) {
+        if (goals == null || goals.isEmpty()) return false;
+        Set<String> leafGoalIds = new HashSet<>();
+        for (moise.os.fs.Goal g : goals) {
+            if (!g.hasPlan()) {
+                leafGoalIds.add(g.getId());
+            }
+        }
+        return !leafGoalIds.isEmpty() && achievedGoals.containsAll(leafGoalIds);
+    }
+
+    private static boolean hasLeafGoals(Collection<moise.os.fs.Goal> goals) {
+        if (goals == null) return false;
+        for (moise.os.fs.Goal g : goals) {
+            if (!g.hasPlan()) return true;
+        }
+        return false;
+    }
+
     public boolean isSchemeCompleted(String lastGoal) {
         if (getSpec() != null) {
             Collection<moise.os.fs.Goal> goals = getSpec().getGoals();
-            if (goals != null && !goals.isEmpty()) {
-                Set<String> leafGoalIds = new HashSet<>();
-                for (moise.os.fs.Goal g : goals) {
-                    if (!g.hasPlan()) {
-                        leafGoalIds.add(g.getId());
-                    }
-                }
-                if (!leafGoalIds.isEmpty()) {
-                    return achievedGoals.containsAll(leafGoalIds);
-                }
+            if (hasLeafGoals(goals)) {
+                return allLeafGoalsAchieved(goals);
             }
         }
         return !achievedGoals.isEmpty();
@@ -980,35 +927,27 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     protected boolean isRecoveryGoalAchievedOnBoard(String recSchType, String achievedGoal) {
         if (getSpec() != null && getSpec().getFS() != null) {
             moise.os.fs.Scheme recSpec = getSpec().getFS().findScheme(recSchType);
-            if (recSpec != null) {
-                Set<String> leafGoals = new HashSet<>();
-                for (moise.os.fs.Goal g : recSpec.getGoals()) {
-                    if (!g.hasPlan()) {
-                        leafGoals.add(g.getId());
-                    }
-                }
-                if (!leafGoals.isEmpty()) {
-                    return achievedGoals.containsAll(leafGoals);
-                }
+            if (recSpec != null && hasLeafGoals(recSpec.getGoals())) {
+                return allLeafGoalsAchieved(recSpec.getGoals());
             }
         }
         return achievedGoal != null && achievedGoal.contains(recSchType);
     }
 
     public void completeRecoveryForScheme(String recSchType) {
-       CopyOnWriteArrayList<PendingRecovery> list = pendingRecoveries.remove(recSchType);
-        if (list != null && !list.isEmpty()) {
-            for (PendingRecovery rec : list) {
-                FaultTolerantSchemeBoard src = rec.getSourceBoard();
-                String failedGoal = rec.getFailedGoalId();
-                if (src != null) {
-                    src.logger.info("Recovery scheme '" + recSchType + "' succeeded! Automatically RESUMING failed goal '" + failedGoal + "' on source board.");
-                    src.resumeGoal(failedGoal);
-                    src.safeSignal("recovery_succeeded", recSchType, failedGoal);
-                    src.safeDefineObsProperty("recoverySucceeded", recSchType, failedGoal);
-                } else {
-                    Logger.getLogger(recSchType).info("Recovery scheme '" + recSchType + "' succeeded! Automatically RESUMING failed goal '" + failedGoal + "' on source board.");
-                }
+        CopyOnWriteArrayList<PendingRecovery> list = pendingRecoveries.remove(recSchType);
+        if (list == null || list.isEmpty()) return;
+        for (PendingRecovery rec : list) {
+            FaultTolerantSchemeBoard src = rec.getSourceBoard();
+            String failedGoal = rec.getFailedGoalId();
+            String msg = "Recovery scheme '" + recSchType + "' succeeded! Automatically RESUMING failed goal '" + failedGoal + "' on source board.";
+            if (src != null) {
+                src.logger.info(msg);
+                src.resumeGoal(failedGoal);
+                src.safeSignal("recovery_succeeded", recSchType, failedGoal);
+                src.safeDefineObsProperty("recoverySucceeded", recSchType, failedGoal);
+            } else {
+                Logger.getLogger(recSchType).info(msg);
             }
         }
     }
@@ -1055,8 +994,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     public void suspendJasonGoal(String agName, String goalId) {
         Agent ag = getAgentByName(agName);
         if (ag != null) {
-            boolean done = suspendJasonGoalForAgent(ag, goalId);
-            if (done) {
+            if (suspendJasonGoalForAgent(ag, goalId)) {
                 suspendedAgentGoals.computeIfAbsent(goalId, k -> new HashSet<>()).add(agName);
                 logger.info("Actively suspended Jason goal '" + goalId + "' for agent '" + agName + "'.");
                 safeSignal("jason_goal_suspended", agName, goalId);
@@ -1070,7 +1008,6 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
     public void suspendJasonGoal(String goalId) {
         Set<String> affected = new HashSet<>();
 
-        
         for (String agName : getAgentsCommittedToGoal(goalId)) {
             Agent ag = getAgentByName(agName);
             if (ag != null && suspendJasonGoalForAgent(ag, goalId)) {
@@ -1078,23 +1015,17 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             }
         }
 
-        
         if (lastCallingAgent != null) {
             Agent callerAg = getAgentByName(lastCallingAgent);
-            if (callerAg != null && agentHasGoal(callerAg, goalId)) {
-                if (suspendJasonGoalForAgent(callerAg, goalId)) {
-                    affected.add(lastCallingAgent);
-                }
+            if (callerAg != null && agentHasGoal(callerAg, goalId) && suspendJasonGoalForAgent(callerAg, goalId)) {
+                affected.add(lastCallingAgent);
             }
         }
 
-       
         for (Map.Entry<String, Agent> entry : getAllAvailableAgents().entrySet()) {
             Agent ag = entry.getValue();
-            if (agentHasGoal(ag, goalId)) {
-                if (suspendJasonGoalForAgent(ag, goalId)) {
-                    affected.add(entry.getKey());
-                }
+            if (agentHasGoal(ag, goalId) && suspendJasonGoalForAgent(ag, goalId)) {
+                affected.add(entry.getKey());
             }
         }
 
@@ -1115,10 +1046,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         resumeJasonGoal(goalId);
         if (wasSuspended || !isJasonGoalSuspended(goalId)) {
             logger.info("Goal '" + goalId + "' has been RESUMED from suspension (scheme and Jason intentions).");
-            safeRemoveObsProperty("goalSuspended");
-            safeRemoveObsProperty("recoveryState");
-            safeDefineObsProperty("goalResumed", goalId);
-            safeSignal("goal_resumed", goalId);
+            markGoalResumed(goalId);
         }
     }
 
@@ -1128,21 +1056,24 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         Set<String> ags = suspendedAgentGoals.get(goalId);
         if (ags == null || ags.isEmpty()) {
             suspendedGoals.remove(goalId);
-            safeRemoveObsProperty("goalSuspended");
-            safeRemoveObsProperty("recoveryState");
-            safeDefineObsProperty("goalResumed", goalId);
-            safeSignal("goal_resumed", goalId);
+            markGoalResumed(goalId);
         } else {
             safeSignal("goal_resumed", goalId, agName);
         }
+    }
+
+    private void markGoalResumed(String goalId) {
+        safeRemoveObsProperty("goalSuspended");
+        safeRemoveObsProperty("recoveryState");
+        safeDefineObsProperty("goalResumed", goalId);
+        safeSignal("goal_resumed", goalId);
     }
 
     @OPERATION
     public void resumeJasonGoal(String agName, String goalId) {
         Agent ag = getAgentByName(agName);
         if (ag != null) {
-            boolean done = resumeJasonGoalForAgent(ag, goalId);
-            if (done) {
+            if (resumeJasonGoalForAgent(ag, goalId)) {
                 Set<String> set = suspendedAgentGoals.get(goalId);
                 if (set != null) {
                     set.remove(agName);
@@ -1164,9 +1095,9 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             targetAgents.addAll(recorded);
         }
         targetAgents.addAll(getAgentsCommittedToGoal(goalId));
-        for (Map.Entry<String, Agent> entry : getAllAvailableAgents().entrySet()) {
-            if (isJasonGoalSuspended(entry.getKey(), goalId)) {
-                targetAgents.add(entry.getKey());
+        for (String agName : getAllAvailableAgents().keySet()) {
+            if (isJasonGoalSuspended(agName, goalId)) {
+                targetAgents.add(agName);
             }
         }
 
@@ -1187,62 +1118,62 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         }
     }
 
+    private static boolean isGoalTrigger(Trigger tr, String goalId) {
+        return tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor());
+    }
+
+    private boolean eventMatchesGoal(Event ev, String goalId) {
+        return isGoalTrigger(ev.getTrigger(), goalId)
+                || (ev.getIntention() != null && matchesGoalFunctor(ev.getIntention(), goalId));
+    }
+
     public boolean suspendJasonGoalForAgent(Agent ag, String goalId) {
         if (ag == null || ag.getTS() == null || goalId == null) return false;
         TransitionSystem ts = ag.getTS();
         Circumstance c = ts.getC();
         boolean suspended = false;
 
-        // 1. Jason standard suspend internal action
         try {
             Literal gLit = ASSyntax.parseLiteral(goalId);
-            Object res = new suspend().execute(ts, new Unifier(), new Term[] { gLit });
-            if (Boolean.TRUE.equals(res)) {
+            if (Boolean.TRUE.equals(new suspend().execute(ts, new Unifier(), new Term[]{gLit}))) {
                 suspended = true;
             }
         } catch (Exception e) {
             logger.fine("jason.stdlib.suspend error: " + e.getMessage());
         }
 
-        
         Atom reason = ASSyntax.createAtom("org_recovery");
         synchronized (c) {
             try {
-                
                 for (Intention i : new ArrayList<>(c.getRunningIntentions())) {
-                    if (matchesGoalFunctor(i, goalId) && !i.isSuspended()) {
+                    if (!i.isSuspended() && matchesGoalFunctor(i, goalId)) {
                         i.setSuspended(true);
                         c.removeRunningIntention(i);
-                        c.addPendingIntention("suspended-" + i.getId(), reason, i, true);
+                        c.addPendingIntention(SUSPENDED_PREFIX + i.getId(), reason, i, true);
                         suspended = true;
                     }
                 }
-                
+
                 for (ActionExec act : new ArrayList<>(c.getPendingActions().values())) {
                     Intention i = act.getIntention();
-                    if (i != null && matchesGoalFunctor(i, goalId) && !i.isSuspended()) {
+                    if (i != null && !i.isSuspended() && matchesGoalFunctor(i, goalId)) {
                         i.setSuspended(true);
-                        c.addPendingIntention("suspended-" + i.getId(), reason, i, true);
+                        c.addPendingIntention(SUSPENDED_PREFIX + i.getId(), reason, i, true);
                         suspended = true;
                     }
                 }
-                
+
                 Intention sel = c.getSelectedIntention();
-                if (sel != null && matchesGoalFunctor(sel, goalId) && !sel.isSuspended()) {
+                if (sel != null && !sel.isSuspended() && matchesGoalFunctor(sel, goalId)) {
                     sel.setSuspended(true);
-                    c.addPendingIntention("suspended-self-" + sel.getId(), reason, sel, true);
+                    c.addPendingIntention(SUSPENDED_PREFIX + "self-" + sel.getId(), reason, sel, true);
                     suspended = true;
                 }
-                
+
                 for (Event ev : new ArrayList<>(c.getEvents())) {
-                    Trigger tr = ev.getTrigger();
-                    boolean match = (tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor()));
-                    if (!match && ev.getIntention() != null) {
-                        match = matchesGoalFunctor(ev.getIntention(), goalId);
-                    }
-                    if (match) {
+                    if (eventMatchesGoal(ev, goalId)) {
                         c.removeEvent(ev);
-                        c.addPendingEvent("suspended-" + ev.getTrigger() + (ev.getIntention() != null ? ev.getIntention().getId() : "0"), reason, ev);
+                        c.addPendingEvent(SUSPENDED_PREFIX + ev.getTrigger() + (ev.getIntention() != null ? ev.getIntention().getId() : "0"), reason, ev);
                         if (ev.getIntention() != null) {
                             ev.getIntention().setSuspended(true);
                         }
@@ -1262,52 +1193,38 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         Circumstance c = ts.getC();
         boolean resumed = false;
 
-        
         try {
             Literal gLit = ASSyntax.parseLiteral(goalId);
-            Object res = new resume().execute(ts, new Unifier(), new Term[] { gLit });
-            if (Boolean.TRUE.equals(res)) {
+            if (Boolean.TRUE.equals(new resume().execute(ts, new Unifier(), new Term[]{gLit}))) {
                 resumed = true;
             }
         } catch (Exception e) {
             logger.fine("jason.stdlib.resume error: " + e.getMessage());
         }
 
-        
         synchronized (c) {
             try {
-                
                 for (Map.Entry<String, Intention> entry : new ArrayList<>(c.getPendingIntentions().entrySet())) {
                     String key = entry.getKey();
-                    if (key.startsWith("suspended-")) {
-                        Intention i = entry.getValue();
-                        if (matchesGoalFunctor(i, goalId)) {
-                            c.removePendingIntention(key);
-                            c.resumeIntention(i, null);
-                            i.setSuspended(false);
-                            resumed = true;
-                        }
+                    Intention i = entry.getValue();
+                    if (key.startsWith(SUSPENDED_PREFIX) && matchesGoalFunctor(i, goalId)) {
+                        c.removePendingIntention(key);
+                        c.resumeIntention(i, null);
+                        i.setSuspended(false);
+                        resumed = true;
                     }
                 }
 
-               
                 for (Map.Entry<String, Event> entry : new ArrayList<>(c.getPendingEvents().entrySet())) {
                     String key = entry.getKey();
-                    if (key.startsWith("suspended-")) {
-                        Event ev = entry.getValue();
-                        Trigger tr = ev.getTrigger();
-                        boolean match = (tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor()));
-                        if (!match && ev.getIntention() != null) {
-                            match = matchesGoalFunctor(ev.getIntention(), goalId);
+                    Event ev = entry.getValue();
+                    if (key.startsWith(SUSPENDED_PREFIX) && eventMatchesGoal(ev, goalId)) {
+                        c.removePendingEvent(key);
+                        c.addEvent(ev);
+                        if (ev.getIntention() != null) {
+                            ev.getIntention().setSuspended(false);
                         }
-                        if (match) {
-                            c.removePendingEvent(key);
-                            c.addEvent(ev);
-                            if (ev.getIntention() != null) {
-                                ev.getIntention().setSuspended(false);
-                            }
-                            resumed = true;
-                        }
+                        resumed = true;
                     }
                 }
             } catch (Exception e) {
@@ -1321,13 +1238,16 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         if (i == null || goalId == null) return false;
         try {
             for (IntendedMeans im : i) {
-                Trigger tr = im.getTrigger();
-                if (tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor())) {
+                if (isGoalTrigger(im.getTrigger(), goalId)) {
                     return true;
                 }
             }
         } catch (Exception ignored) {}
         return false;
+    }
+
+    private boolean intentionHasGoal(Intention i, Trigger g, Unifier u, String goalId) {
+        return i != null && (i.hasTrigger(g, u) || matchesGoalFunctor(i, goalId));
     }
 
     public boolean agentHasGoal(Agent ag, String goalId) {
@@ -1338,23 +1258,22 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             Unifier u = new Unifier();
 
             synchronized (c) {
-                
                 for (Intention i : new ArrayList<>(c.getRunningIntentions())) {
-                    if (i.hasTrigger(g, u) || matchesGoalFunctor(i, goalId)) return true;
+                    if (intentionHasGoal(i, g, u, goalId)) return true;
                 }
-                
+
                 for (ActionExec act : new ArrayList<>(c.getPendingActions().values())) {
-                    if (act.getIntention() != null && (act.getIntention().hasTrigger(g, u) || matchesGoalFunctor(act.getIntention(), goalId))) return true;
+                    if (intentionHasGoal(act.getIntention(), g, u, goalId)) return true;
                 }
-               
-                if (c.getSelectedIntention() != null && (c.getSelectedIntention().hasTrigger(g, u) || matchesGoalFunctor(c.getSelectedIntention(), goalId))) return true;
-              
+
+                if (intentionHasGoal(c.getSelectedIntention(), g, u, goalId)) return true;
+
                 for (Event ev : new ArrayList<>(c.getEvents())) {
-                    if (u.unifies(g, ev.getTrigger()) || (ev.getIntention() != null && (ev.getIntention().hasTrigger(g, u) || matchesGoalFunctor(ev.getIntention(), goalId)))) return true;
+                    if (u.unifies(g, ev.getTrigger()) || intentionHasGoal(ev.getIntention(), g, u, goalId)) return true;
                 }
-                
+
                 for (Intention i : new ArrayList<>(c.getPendingIntentions().values())) {
-                    if (i.hasTrigger(g, u) || matchesGoalFunctor(i, goalId)) return true;
+                    if (intentionHasGoal(i, g, u, goalId)) return true;
                 }
             }
         } catch (Exception ignored) {}
@@ -1371,8 +1290,7 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                     if (ags != null) {
                         for (Term t : ags) {
                             if (t.isAtom() || t.isString()) {
-                                String agName = t.isString() ? ((StringTerm) t).getString() : t.toString();
-                                list.add(agName);
+                                list.add(t.isString() ? ((StringTerm) t).getString() : t.toString());
                             }
                         }
                     }
@@ -1391,8 +1309,9 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
                 Map<String, LocalAgArch> masAgs = RunLocalMAS.getRunner().getAgs();
                 if (masAgs != null) {
                     for (Map.Entry<String, LocalAgArch> entry : masAgs.entrySet()) {
-                        if (entry.getValue() != null && entry.getValue().getTS() != null && entry.getValue().getTS().getAg() != null) {
-                            all.putIfAbsent(entry.getKey(), entry.getValue().getTS().getAg());
+                        LocalAgArch arch = entry.getValue();
+                        if (arch != null && arch.getTS() != null && arch.getTS().getAg() != null) {
+                            all.putIfAbsent(entry.getKey(), arch.getTS().getAg());
                         }
                     }
                 }
@@ -1407,18 +1326,13 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         Circumstance c = ag.getTS().getC();
         synchronized (c) {
             for (Map.Entry<String, Intention> entry : c.getPendingIntentions().entrySet()) {
-                if (entry.getKey().startsWith("suspended-") && matchesGoalFunctor(entry.getValue(), goalId)) {
+                if (entry.getKey().startsWith(SUSPENDED_PREFIX) && matchesGoalFunctor(entry.getValue(), goalId)) {
                     return true;
                 }
             }
             for (Map.Entry<String, Event> entry : c.getPendingEvents().entrySet()) {
-                if (entry.getKey().startsWith("suspended-")) {
-                    Event ev = entry.getValue();
-                    Trigger tr = ev.getTrigger();
-                    if ((tr != null && tr.isAchvGoal() && tr.getLiteral() != null && goalId.equals(tr.getLiteral().getFunctor()))
-                            || (ev.getIntention() != null && matchesGoalFunctor(ev.getIntention(), goalId))) {
-                        return true;
-                    }
+                if (entry.getKey().startsWith(SUSPENDED_PREFIX) && eventMatchesGoal(entry.getValue(), goalId)) {
+                    return true;
                 }
             }
         }
@@ -1427,13 +1341,13 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
     public boolean isJasonGoalSuspended(String goalId) {
         Set<String> ags = suspendedAgentGoals.get(goalId);
-        if (ags != null && !ags.isEmpty()) {
+        if (ags != null) {
             for (String agName : ags) {
                 if (isJasonGoalSuspended(agName, goalId)) return true;
             }
         }
-        for (Map.Entry<String, Agent> entry : getAllAvailableAgents().entrySet()) {
-            if (isJasonGoalSuspended(entry.getKey(), goalId)) return true;
+        for (String agName : getAllAvailableAgents().keySet()) {
+            if (isJasonGoalSuspended(agName, goalId)) return true;
         }
         return false;
     }
@@ -1454,78 +1368,51 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
         safeSignal("goal_failed", goalId);
     }
 
-    private static java.lang.reflect.Field artifactLockField;
-    static {
-        try {
-            artifactLockField = cartago.Artifact.class.getDeclaredField("lock");
-            artifactLockField.setAccessible(true);
-        } catch (Throwable ignored) {}
-    }
-
-    private java.util.concurrent.locks.ReentrantLock getArtifactLock() {
-        if (artifactLockField != null) {
+    private ReentrantLock getArtifactLock() {
+        if (ARTIFACT_LOCK_FIELD != null) {
             try {
-                return (java.util.concurrent.locks.ReentrantLock) artifactLockField.get(this);
+                return (ReentrantLock) ARTIFACT_LOCK_FIELD.get(this);
             } catch (Throwable ignored) {}
         }
         return null;
     }
 
-    protected void safeSignal(String signalName, Object... args) {
-        java.util.concurrent.locks.ReentrantLock l = getArtifactLock();
-        boolean lockedHere = false;
-        if (l != null && !l.isHeldByCurrentThread()) {
+    private void withArtifactLock(Runnable action) {
+        ReentrantLock l = getArtifactLock();
+        boolean lockedHere = l != null && !l.isHeldByCurrentThread();
+        if (lockedHere) {
             l.lock();
-            lockedHere = true;
         }
         try {
-            signal(signalName, args);
+            action.run();
         } catch (Throwable ignored) {
         } finally {
-            if (lockedHere && l != null && l.isHeldByCurrentThread()) {
+            if (lockedHere && l.isHeldByCurrentThread()) {
                 l.unlock();
             }
         }
     }
 
+    protected void safeSignal(String signalName, Object... args) {
+        withArtifactLock(() -> signal(signalName, args));
+    }
+
     protected void safeDefineObsProperty(String name, Object... values) {
-        java.util.concurrent.locks.ReentrantLock l = getArtifactLock();
-        boolean lockedHere = false;
-        if (l != null && !l.isHeldByCurrentThread()) {
-            l.lock();
-            lockedHere = true;
-        }
-        try {
+        withArtifactLock(() -> {
             if (hasObsProperty(name)) {
                 getObsProperty(name).updateValues(values);
             } else {
                 defineObsProperty(name, values);
             }
-        } catch (Exception ignored) {
-        } finally {
-            if (lockedHere && l != null && l.isHeldByCurrentThread()) {
-                l.unlock();
-            }
-        }
+        });
     }
 
     protected void safeRemoveObsProperty(String name) {
-        java.util.concurrent.locks.ReentrantLock l = getArtifactLock();
-        boolean lockedHere = false;
-        if (l != null && !l.isHeldByCurrentThread()) {
-            l.lock();
-            lockedHere = true;
-        }
-        try {
+        withArtifactLock(() -> {
             if (hasObsProperty(name)) {
                 removeObsProperty(name);
             }
-        } catch (Exception ignored) {
-        } finally {
-            if (lockedHere && l != null && l.isHeldByCurrentThread()) {
-                l.unlock();
-            }
-        }
+        });
     }
 
     protected void safeSetArgumentValue(String goalId, String argId, Object value) {
