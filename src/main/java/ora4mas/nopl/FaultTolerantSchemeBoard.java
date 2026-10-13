@@ -27,6 +27,7 @@ import jason.infra.local.RunLocalMAS;
 
 import java.io.File;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Level;
@@ -827,29 +828,55 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
 
     protected void autoCreateRecoverySchemeArtifact(String recoverySchemeId) {
         boolean created = false;
-        try {
-            Collection<OrgBoard> orgBoards = OrgBoard.getOrbBoards();
-            if (orgBoards != null && !orgBoards.isEmpty()) {
-                for (OrgBoard ob : orgBoards) {
-                    try {
-                        cartago.OpFeedbackParam<cartago.ArtifactId> fb = new cartago.OpFeedbackParam<>();
-                        ob.createScheme(recoverySchemeId, recoverySchemeId, fb);
-                        logger.info("OrgBoard automatically created recovery scheme artifact '" + recoverySchemeId + "'.");
-                        created = true;
-                        break;
-                    } catch (Exception ignored) {}
+        cartago.ArtifactId recAid = null;
+
+        // Resolve osPath from this board, active boards, or OrgBoard
+        String osPath = this.osFile;
+        if (osPath == null) {
+            for (FaultTolerantSchemeBoard b : activeBoards) {
+                if (b != null && b.osFile != null) {
+                    osPath = b.osFile;
+                    break;
                 }
+            }
+        }
+        if (osPath == null) {
+            try {
+                Collection<OrgBoard> orgBoards = OrgBoard.getOrbBoards();
+                if (orgBoards != null && !orgBoards.isEmpty()) {
+                    for (OrgBoard ob : orgBoards) {
+                        if (ob != null && ob.getOSFile() != null) {
+                            osPath = ob.getOSFile();
+                            break;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        if (osPath == null) {
+            logger.warning("Cannot auto-create recovery scheme artifact '" + recoverySchemeId + "': OS specification file is unknown.");
+            return;
+        }
+
+        // Check if artifact already exists
+        try {
+            recAid = lookupArtifact(recoverySchemeId);
+            if (recAid != null) {
+                created = true;
+                logger.info("Recovery scheme artifact '" + recoverySchemeId + "' already exists.");
             }
         } catch (Throwable ignored) {}
 
-        if (!created && this.osFile != null) {
+        // Create recovery scheme artifact if not exists
+        if (!created) {
             try {
-                cartago.ArtifactConfig cfg = new cartago.ArtifactConfig(this.osFile, recoverySchemeId);
-                makeArtifact(recoverySchemeId, "ora4mas.nopl.FaultTolerantSchemeBoard", cfg);
-                logger.info("FaultTolerantSchemeBoard automatically created recovery scheme artifact '" + recoverySchemeId + "' via makeArtifact.");
+                cartago.ArtifactConfig cfg = new cartago.ArtifactConfig(osPath, recoverySchemeId);
+                recAid = makeArtifact(recoverySchemeId, getClass().getName(), cfg);
+                logger.info("FaultTolerantSchemeBoard automatically created recovery scheme artifact '" + recoverySchemeId + "'.");
                 created = true;
             } catch (Throwable e) {
-                logger.fine("makeArtifact auto creation notice: " + e.getMessage());
+                logger.warning("makeArtifact failed for '" + recoverySchemeId + "': " + e.getMessage());
             }
         }
 
@@ -857,15 +884,37 @@ public class FaultTolerantSchemeBoard extends SchemeBoard {
             safeDefineObsProperty("recoverySchemeCreated", recoverySchemeId);
             safeSignal("recovery_scheme_created", recoverySchemeId);
 
-            // Tu dong lien ket recovery scheme vao GroupBoard de kich hoat Normative Engine (neu co group)
+           
             try {
                 Collection<GroupBoard> groupBoards = GroupBoard.getGroupBoards();
                 if (groupBoards != null && !groupBoards.isEmpty()) {
                     for (GroupBoard gb : groupBoards) {
                         try {
-                            gb.addSchemeWhenFormationOk(recoverySchemeId);
-                            logger.info("GroupBoard automatically linked recovery scheme '" + recoverySchemeId + "'.");
-                        } catch (Exception ignored) {}
+                            cartago.Workspace targetWsp = null;
+                            try {
+                                Field f = cartago.Artifact.class.getDeclaredField("wsp");
+                                f.setAccessible(true);
+                                targetWsp = (cartago.Workspace) f.get(gb);
+                            } catch (Throwable ignored) {}
+
+                            if (targetWsp != null) {
+                                cartago.ICartagoContext ctx = targetWsp.joinWorkspace(
+                                    new cartago.AgentIdCredential("FaultTolerantSystem"),
+                                    new cartago.ICartagoCallback() {
+                                        public void notifyCartagoEvent(cartago.CartagoEvent a) {}
+                                    }
+                                );
+                                String gbArtName = (gb.getGrpState() != null) ? gb.getGrpState().getId() : "t_group";
+                                ctx.doAction(1, gbArtName, new cartago.Op("addSchemeWhenFormationOk", new Object[] { recoverySchemeId }), null, -1);
+                                logger.info("GroupBoard automatically linked recovery scheme '" + recoverySchemeId + "'.");
+                            } else {
+                                if (gb.getGrpState() != null) {
+                                    gb.getGrpState().addResponsibleForScheme(recoverySchemeId);
+                                }
+                            }
+                        } catch (Throwable e) {
+                            logger.warning("GroupBoard link notice: " + e.getMessage());
+                        }
                     }
                 }
             } catch (Throwable ignored) {}

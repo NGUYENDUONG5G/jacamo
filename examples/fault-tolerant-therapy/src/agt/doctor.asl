@@ -42,28 +42,18 @@
     ?prescribed(Patient, Med, Dosage, Duration);
     .print("[BAC SI BOB] [PHUC HOI] Dang xem xet dieu chinh phac do tren scheme ", Sch, "...");
     .wait(1000);
-    .print("[BAC SI BOB] [PHUC HOI] Chi dinh y khoa: Giu nguyen don ", Med, ". Yeu cau benh nhan uong du ", Duration, " de tranh vi khuan khang thuoc!").
+    .print("[BAC SI BOB] [PHUC HOI] Chi dinh y khoa: Giu nguyen don ", Med, ". Yeu cau benh nhan uong du ", Duration, " de tranh vi khuan khang thuoc!");
+    .send(Patient, tell, doctor_advice("Phai uong du lieu trinh de tranh vi khuan khang thuoc")).
 
 
-+recovery_required(RecSch, Goal, Error, Args) <-
++recovery_required(RecSch, Goal, Error, [Patient, Day, Reason]) <-
     .print("[NGOAI LE] Nhan tin hieu yeu cau phuc hoi '", RecSch, "' cho muc tieu '", Goal, "' do loi '", Error, "'!");
-    .print("[NGOAI LE] Cac tham so thu thap duoc: ", Args);
-    !handle_reconsult(RecSch, Goal, Args).
-
-+!handle_reconsult(RecSch, Goal, [Patient, Day, Reason]) <-
+    .print("[NGOAI LE] Cac tham so thu thap duoc: [", Patient, ", ", Day, ", ", Reason, "]");
     .print("[BAC SI BOB] [CANH BAO NGUY HIEM] Benh nhan ", Patient, " het trieu chung som vao ngay ", Day, " (ly do: ", Reason, ") va co y dinh ngung uong thuoc!");
     .print("[BAC SI BOB] [CANH BAO NGUY HIEM] Dung khang sinh som dan den nguy co tai phat nang va hinh thanh vi khuan khang thuoc (Antibiotic Resistance)!");
-    .print("[BAC SI BOB] Tien hanh quy trinh tai kham khan cap theo recovery scheme '", RecSch, "'...");
-    !review_symptoms[scheme(RecSch)];
-    !adjust_therapy[scheme(RecSch)];
-    .send(Patient, tell, doctor_advice("Phai uong du lieu trinh de tranh vi khuan khang thuoc"));
-    .wait(500);
-    if (lookupArtifact("therapy_sch", SchId)) {
-        recoveryFinished(RecSch)[artifact_id(SchId)];
-    } else {
-        recoveryFinished(RecSch);
-    };
-    .print("[BAC SI BOB] Da hoan tat quy trinh phuc hoi '", RecSch, "', he thong da mo khoa (resumed) lieu trinh thanh cong.").
+    lookupArtifact(RecSch, SchId);
+    focus(SchId);
+    commitMission(mDoctorReconsult)[artifact_id(SchId)].
 
 
 +recoverySchemeRequired(RecSch, Goal) <-
