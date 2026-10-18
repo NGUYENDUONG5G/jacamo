@@ -32,6 +32,7 @@ sourceSets {
 }
 
 repositories {
+    mavenLocal()
     mavenCentral()
 
     maven { url "https://raw.githubusercontent.com/jacamo-lang/mvn-repo/master" }
@@ -50,7 +51,7 @@ dependencies {
     api('org.jacamo:cartago:3.1') {  transitive = false  }
     api('org.jacamo:jaca:3.1') {  transitive = false  }
 
-    api('org.jacamo:moise:1.1') {  transitive = false  }
+    api('org.jacamo:moise:1.2-SNAPSHOT') {  transitive = false  }
     api('org.jacamo:npl:0.6.1')  {  transitive = false  }
 
     api('org.jacamo:intmas:1.0.0')
