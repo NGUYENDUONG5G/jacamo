@@ -59,9 +59,7 @@
 
             <failure id="f_follow_therapy" goal="follow_therapy">
                 <error id="lost_symptoms">
-                    <condition>
-                        <![CDATA[ symptoms_cleared(Patient, Day) & Day < 5 ]]>
-                    </condition>
+                    <condition signal="lost_symptoms" />
                     <argument id="patient_id" arity="1" />
                     <argument id="cleared_day" arity="1" />
                     <argument id="early_recovery_reason" arity="1" />
@@ -69,9 +67,7 @@
                 </error>
 
                 <error id="no_delivery">
-                    <condition>
-                        <![CDATA[ not delivered(PrescriptionId) & ctime(Now) & Now > Deadline ]]>
-                    </condition>
+                    <condition signal="delivery_failed" />
                     <argument id="prescription_id" arity="1" />
                     <argument id="delivery_address" arity="1" />
                     <argument id="delivery_attempt" arity="1" />

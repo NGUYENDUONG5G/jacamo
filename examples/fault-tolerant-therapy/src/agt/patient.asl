@@ -22,7 +22,15 @@ early_recovery_reason("no_more_symptoms").
 +medicine_dispensed(Med, Dosage, Duration) <-
     +my_prescription(Med, Dosage, Duration);
     .print("Da nhan thuoc tu quay duoc: ", Med, " (", Dosage, ", ", Duration, ").").
++symptoms_cleared(Patient, Day) : Day < 5 & early_recovery_reason(Reason) & current_scheme(Sch) <-
+    .print("Phat hien bat thuong tu belief: Trieu chung khoi som vao ngay ", Day, " (< 5)!");
+    .print("Phat signal 'lost_symptoms' len SchemeBoard '", Sch, "' de yeu cau to chuc ho tro...");
+    signalError("lost_symptoms", [Patient, Day, Reason])[artifact_name(Sch)].
+
+
+
 +!follow_therapy[scheme(Sch)] <-
+    +current_scheme(Sch);
     ?my_prescription(Med, Dosage, Duration);
     .print("Bat dau lieu trinh uong thuoc ", Med, " (", Dosage, ") trong ", Duration, " (scheme: ", Sch, ")...");
     .wait(1000);
